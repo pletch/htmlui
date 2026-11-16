@@ -5,6 +5,7 @@ import axios from "axios";
 import { React, Component } from "react";
 import { Navbar, Nav, Container } from "react-bootstrap";
 import { BrowserRouter as Router, NavLink, Navigate, Route, Routes } from "react-router";
+import { Images } from "./pages/Images";
 import { Policy } from "./pages/Policy";
 import { Preferences } from "./pages/Preferences";
 import { Policies } from "./pages/Policies";
@@ -134,6 +135,17 @@ export default class App extends Component {
                   </span>
                   <span className="d-inline-block" data-toggle="tooltip" title="Repository is not connected">
                     <NavLink
+                      data-testid="tab-images"
+                      title=""
+                      data-title="Images"
+                      className={isRepositoryConnected ? "nav-link" : "nav-link disabled"}
+                      to="/images"
+                    >
+                      Images
+                    </NavLink>
+                  </span>
+                  <span className="d-inline-block" data-toggle="tooltip" title="Repository is not connected">
+                    <NavLink
                       data-testid="tab-policies"
                       title=""
                       data-title="Policies"
@@ -181,6 +193,7 @@ export default class App extends Component {
                 <Route path="snapshots/single-source/" element={<SnapshotHistory />} />
                 <Route path="snapshots/dir/:oid/restore" element={<SnapshotRestore />} />
                 <Route path="snapshots/dir/:oid" element={<SnapshotDirectory />} />
+                <Route path="images" element={<Images />} />
                 <Route path="policies/edit/" element={<Policy />} />
                 <Route path="policies" element={<Policies />} />
                 <Route path="tasks/:tid" element={<Task />} />

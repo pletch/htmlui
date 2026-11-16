@@ -1,0 +1,451 @@
+import { faExclamationTriangle, faInfoCircle } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import axios from "axios";
+import moment from "moment";
+import React, { use, useCallback, useEffect, useRef, useState } from "react";
+import Alert from "react-bootstrap/Alert";
+import Badge from "react-bootstrap/Badge";
+import Button from "react-bootstrap/Button";
+import Card from "react-bootstrap/Card";
+import Col from "react-bootstrap/Col";
+import Form from "react-bootstrap/Form";
+import Row from "react-bootstrap/Row";
+import Spinner from "react-bootstrap/Spinner";
+import Table from "react-bootstrap/Table";
+import { Link } from "react-router";
+import KopiaTable from "../components/KopiaTable";
+import { UIPreferencesContext } from "../contexts/UIPreferencesContext";
+import { formatDuration, objectLink, sizeDisplayName } from "../utils/formatutils";
+import { redirect } from "../utils/uiutil";
+
+const statusRefreshMillis = 5000;
+
+const diskSourcePrefix = "image:disk:";
+
+// Task Scheduler result codes that are not failures, as schtasks prints them.
+const taskResults = {
+  0: "Succeeded",
+  267009: "Running",
+  267011: "Has not run yet",
+  267014: "Stopped",
+};
+
+export function taskResultDisplayName(r) {
+  if (r === undefined || r === "") {
+    return "";
+  }
+
+  const known = taskResults[r];
+  if (known) {
+    return known;
+  }
+
+  const n = Number(r);
+  if (Number.isInteger(n)) {
+    return "Failed (0x" + (n >>> 0).toString(16) + ")";
+  }
+
+  return r;
+}
+
+export function diskDisplayName(source) {
+  if (source.path.startsWith(diskSourcePrefix)) {
+    return "Disk " + source.path.substring(diskSourcePrefix.length);
+  }
+
+  return source.path;
+}
+
+/**
+ * Starts the scheduled image task. When the server may not start it, KopiaUI
+ * can run it as administrator after the UAC prompt; elsewhere the person is
+ * told how to start it.
+ *
+ * @returns {Promise<{variant: string, text: string}>} the message to show
+ */
+export async function runImageTask() {
+  const started = {
+    variant: "success",
+    text: "Started the image task. It runs in the background; its result shows here when it ends.",
+  };
+
+  try {
+    await axios.post("/api/v1/images/schedule/run", {});
+    return started;
+  } catch (e) {
+    if (e.response?.data?.code !== "ACCESS_DENIED") {
+      throw e;
+    }
+  }
+
+  if (!window.kopiaUI?.runImageTaskElevated) {
+    return {
+      variant: "warning",
+      text: "Starting the image task needs administrator rights. Run 'kopia image schedule run' in an administrator command prompt.",
+    };
+  }
+
+  const status = await window.kopiaUI.runImageTaskElevated();
+  if (status === "canceled") {
+    return { variant: "warning", text: "The administrator prompt was declined, so the image task did not start." };
+  }
+
+  return started;
+}
+
+function errorText(e) {
+  return e.response?.data?.error || e.message || String(e);
+}
+
+function TaskRow({ task }) {
+  if (task.error) {
+    return (
+      <tr>
+        <td>{task.name}</td>
+        <td colSpan={4} className="text-danger">
+          {task.error}
+        </td>
+      </tr>
+    );
+  }
+
+  if (!task.scheduled) {
+    return (
+      <tr>
+        <td>{task.name}</td>
+        <td colSpan={4}>Not scheduled</td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr>
+      <td>{task.name}</td>
+      <td>{task.status}</td>
+      <td>{task.nextRunTime}</td>
+      <td>{task.lastRunTime}</td>
+      <td>{taskResultDisplayName(task.lastResult)}</td>
+    </tr>
+  );
+}
+
+function LastRun({ status, bytesStringBase2 }) {
+  if (status.lastRunError) {
+    return <Alert variant="danger">Unable to read the last image run: {status.lastRunError}</Alert>;
+  }
+
+  const run = status.lastRun;
+  if (!run) {
+    return <p>No image run has completed yet.</p>;
+  }
+
+  return (
+    <>
+      <p>
+        {run.success ? (
+          <Badge bg="success">Succeeded</Badge>
+        ) : (
+          <Badge bg="danger" data-testid="last-run-failed">
+            Failed
+          </Badge>
+        )}{" "}
+        Imaged {(run.volumes || []).join(" ")}{" "}
+        <span title={moment(run.startTime).toLocaleString()}>{moment(run.startTime).fromNow()}</span>, took{" "}
+        {formatDuration(run.startTime, run.endTime, true)}.
+      </p>
+      {run.error && <Alert variant="danger">{run.error}</Alert>}
+      {(run.images || []).length > 0 && (
+        <ul>
+          {run.images.map((img) => (
+            <li key={img.snapshotId}>
+              {img.source}: read {sizeDisplayName(img.bytesRead, bytesStringBase2)}, uploaded{" "}
+              {img.uploadedBytes === undefined ? "?" : sizeDisplayName(img.uploadedBytes, bytesStringBase2)}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+function RecoveryMedia({ status }) {
+  const findings = status.lastRun?.recoveryMedia || [];
+  const media = status.recoveryMedia;
+  const howToBuild = window.kopiaUI
+    ? "Build it with Create Recovery Media in the KopiaUI tray menu."
+    : "Build it with 'kopia image recovery-media create' in an administrator command prompt.";
+
+  if (status.recoveryMediaError) {
+    return <Alert variant="danger">Unable to read the recovery media record: {status.recoveryMediaError}</Alert>;
+  }
+
+  if (!media) {
+    return (
+      <Alert variant="warning">
+        <FontAwesomeIcon icon={faExclamationTriangle} /> No recovery media was built on this computer. Without it, the
+        system disk can only be restored from a Linux live system. {howToBuild}
+      </Alert>
+    );
+  }
+
+  return (
+    <>
+      <p>
+        Built <span title={moment(media.builtAt).toLocaleString()}>{moment(media.builtAt).fromNow()}</span> with kopia{" "}
+        {media.kopiaVersion}, written to {media.target}.
+        {media.passwordEmbedded && " It holds the repository password: keep it safe."}
+      </p>
+      {findings.length > 0 && (
+        <Alert variant="warning" data-testid="recovery-media-findings">
+          <FontAwesomeIcon icon={faExclamationTriangle} /> The recovery media no longer matches this computer.{" "}
+          {howToBuild}
+          <ul className="mb-0 mt-2">
+            {findings.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
+        </Alert>
+      )}
+    </>
+  );
+}
+
+function ImageStatus({ status, bytesStringBase2, onRun, running, message }) {
+  if (!status.supported) {
+    return (
+      <Alert variant="info">
+        <FontAwesomeIcon icon={faInfoCircle} /> Disk images are created on Windows. Images of this repository&apos;s
+        Windows computers are listed below.
+      </Alert>
+    );
+  }
+
+  const createTask = status.tasks[0];
+  const taskRunning = createTask?.status === "Running";
+
+  return (
+    <Card className="mb-3">
+      <Card.Body>
+        <Row className="mb-2">
+          <Col>
+            <h5>Scheduled images</h5>
+          </Col>
+          <Col xs="auto">
+            <Button
+              size="sm"
+              variant="primary"
+              data-testid="run-image-task"
+              disabled={!createTask?.scheduled || taskRunning || running}
+              onClick={onRun}
+              title="Create images of this computer's disks now, with the scheduled task's settings"
+            >
+              {running || taskRunning ? <Spinner size="sm" animation="border" /> : null} Create Image Now
+            </Button>
+          </Col>
+        </Row>
+        {message && <Alert variant={message.variant}>{message.text}</Alert>}
+        {!createTask?.scheduled && !createTask?.error && (
+          <Alert variant="info">
+            <FontAwesomeIcon icon={faInfoCircle} /> Images are not scheduled on this computer. Set them up with{" "}
+            <code>kopia image schedule install C:</code> in an administrator command prompt.
+          </Alert>
+        )}
+        <Table size="sm" responsive>
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Status</th>
+              <th>Next Run</th>
+              <th>Last Run</th>
+              <th>Last Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {status.tasks.map((t) => (
+              <TaskRow key={t.name} task={t} />
+            ))}
+          </tbody>
+        </Table>
+        <h6>Last image run</h6>
+        <LastRun status={status} bytesStringBase2={bytesStringBase2} />
+        <h6>Recovery media</h6>
+        <RecoveryMedia status={status} />
+      </Card.Body>
+    </Card>
+  );
+}
+
+function imageColumns(bytesStringBase2, showHost) {
+  const size = (v) => (v === undefined ? "" : sizeDisplayName(v, bytesStringBase2));
+
+  const columns = [
+    {
+      id: "startTime",
+      header: "Start Time",
+      width: 160,
+      accessorFn: (x) => x.startTime,
+      cell: (x) => (
+        <Link to={objectLink(x.row.original.rootID)} title={moment(x.getValue()).toLocaleString()}>
+          {moment(x.getValue()).fromNow()}
+        </Link>
+      ),
+    },
+    {
+      id: "disk",
+      header: "Disk",
+      accessorFn: (x) => diskDisplayName(x.source),
+      cell: (x) => (
+        <>
+          {x.getValue()}
+          {x.row.original.metadataError && (
+            <>
+              {" "}
+              <FontAwesomeIcon
+                color="red"
+                icon={faExclamationTriangle}
+                title={"Unable to read the image statistics: " + x.row.original.metadataError}
+              />
+            </>
+          )}
+        </>
+      ),
+    },
+    {
+      id: "volumes",
+      header: "Volumes",
+      accessorFn: (x) => (x.volumes || []).map((v) => v.entryName).join(", "),
+    },
+    {
+      id: "duration",
+      header: "Duration",
+      accessorFn: (x) => formatDuration(x.startTime, x.endTime, true),
+    },
+    { id: "size", header: "Size", accessorFn: (x) => x.size, cell: (x) => size(x.getValue()) },
+    { id: "read", header: "Read", accessorFn: (x) => x.bytesRead, cell: (x) => size(x.getValue()) },
+    {
+      id: "uploaded",
+      header: "Uploaded",
+      accessorFn: (x) => x.uploadedBytes,
+      cell: (x) => size(x.getValue()),
+    },
+  ];
+
+  if (showHost) {
+    columns.splice(1, 0, {
+      id: "host",
+      header: "Computer",
+      accessorFn: (x) => x.source.host,
+    });
+  }
+
+  return columns;
+}
+
+/**
+ * Lists the disk images in the repository and, on Windows, the scheduled
+ * image tasks, the last image run and the recovery media of the computer the
+ * server runs on.
+ */
+export function Images() {
+  const { bytesStringBase2 } = use(UIPreferencesContext);
+  const [allHosts, setAllHosts] = useState(false);
+  const [images, setImages] = useState(null);
+  const [status, setStatus] = useState(null);
+  const [error, setError] = useState(null);
+  const [running, setRunning] = useState(false);
+  const [message, setMessage] = useState(null);
+  const lastRunEndRef = useRef(undefined);
+
+  const fetchImages = useCallback(() => {
+    axios
+      .get("/api/v1/images" + (allHosts ? "?all=1" : ""))
+      .then((result) => setImages(result.data))
+      .catch((e) => {
+        redirect(e);
+        setError(e);
+      });
+  }, [allHosts]);
+
+  const fetchStatus = useCallback(() => {
+    axios
+      .get("/api/v1/images/status")
+      .then((result) => {
+        setStatus(result.data);
+
+        // a run that ended added images
+        const end = result.data.lastRun?.endTime;
+        if (lastRunEndRef.current !== undefined && end !== lastRunEndRef.current) {
+          fetchImages();
+        }
+        lastRunEndRef.current = end;
+      })
+      .catch((e) => {
+        redirect(e);
+        setError(e);
+      });
+  }, [fetchImages]);
+
+  useEffect(() => {
+    fetchImages();
+  }, [fetchImages]);
+
+  useEffect(() => {
+    fetchStatus();
+    const interval = window.setInterval(fetchStatus, statusRefreshMillis);
+    return () => window.clearInterval(interval);
+  }, [fetchStatus]);
+
+  const onRun = () => {
+    setRunning(true);
+    setMessage(null);
+
+    runImageTask()
+      .then(setMessage)
+      .catch((e) => setMessage({ variant: "danger", text: "Unable to start the image task: " + errorText(e) }))
+      .finally(() => {
+        setRunning(false);
+        fetchStatus();
+      });
+  };
+
+  if (error) {
+    return <Alert variant="danger">{errorText(error)}</Alert>;
+  }
+
+  if (!images || !status) {
+    return <p>Loading ...</p>;
+  }
+
+  return (
+    <>
+      <ImageStatus
+        status={status}
+        bytesStringBase2={bytesStringBase2}
+        onRun={onRun}
+        running={running}
+        message={message}
+      />
+      <Row className="mb-2">
+        <Col>
+          <h5>Images</h5>
+        </Col>
+        <Col xs="auto">
+          <Form.Check
+            type="switch"
+            id="images-all-hosts"
+            label="All computers"
+            checked={allHosts}
+            onChange={(e) => setAllHosts(e.target.checked)}
+          />
+        </Col>
+      </Row>
+      {images.images.length === 0 ? (
+        <Alert variant="info">
+          <FontAwesomeIcon icon={faInfoCircle} /> No disk images{allHosts ? "" : " of " + images.localHost} yet.
+        </Alert>
+      ) : (
+        <KopiaTable data={images.images} columns={imageColumns(bytesStringBase2, allHosts)} />
+      )}
+    </>
+  );
+}
