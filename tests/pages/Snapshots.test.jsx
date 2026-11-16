@@ -119,6 +119,21 @@ describe("Snapshots component", () => {
     unmount();
   });
 
+  test("shows what the last snapshot uploaded", async () => {
+    const withUploaded = structuredClone(mockSourcesResponse);
+    withUploaded.sources[0].lastSnapshot.uploadedBytes = 2500000;
+    axiosMock.onGet("/api/v1/sources").reply(200, withUploaded);
+
+    const { unmount } = renderSnapshots();
+
+    await waitFor(() => {
+      expect(screen.getByText("Uploaded")).toBeInTheDocument();
+      expect(screen.getByText("2.5 MB")).toBeInTheDocument();
+    });
+
+    unmount();
+  });
+
   test("displays sources in table after loading", async () => {
     axiosMock.onGet("/api/v1/sources").reply(200, mockSourcesResponse);
 

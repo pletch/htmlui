@@ -29,6 +29,24 @@ export function sizeWithFailures(size, summ, bytesStringBase2) {
   );
 }
 
+export const uploadedBytesTitle =
+  "New data the snapshot stored after deduplication, compression and encryption; unchanged files add nothing";
+
+/**
+ * Shows the bytes a snapshot uploaded. Snapshots taken before kopia
+ * recorded it have none, and show nothing.
+ *
+ * @param {number|undefined|null} uploaded - the snapshot's uploadedBytes
+ * @param {boolean} bytesStringBase2 - whether to use base-2 units
+ */
+export function uploadedBytesCell(uploaded, bytesStringBase2) {
+  if (uploaded === undefined || uploaded === null || uploaded < 0) {
+    return "";
+  }
+
+  return <span title={uploadedBytesTitle}>{sizeDisplayName(uploaded, bytesStringBase2)}</span>;
+}
+
 /**
  * In case of an error, redirect to the repository selection
  * @param {error} The error that was returned
