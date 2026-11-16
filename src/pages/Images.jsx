@@ -13,6 +13,7 @@ import Row from "react-bootstrap/Row";
 import Spinner from "react-bootstrap/Spinner";
 import Table from "react-bootstrap/Table";
 import { Link } from "react-router";
+import { ImageScheduleForm, scheduleSummary, settingsFromSchedule } from "../components/ImageScheduleForm";
 import KopiaTable from "../components/KopiaTable";
 import { UIPreferencesContext } from "../contexts/UIPreferencesContext";
 import { formatDuration, objectLink, sizeDisplayName } from "../utils/formatutils";
@@ -210,7 +211,47 @@ function RecoveryMedia({ status }) {
   );
 }
 
-function ImageStatus({ status, bytesStringBase2, onRun, running, message }) {
+/**
+ * Shows the schedule settings and what needs attention: tasks that write to
+ * another repository, or that run an older kopia.
+ */
+function ScheduleSettings({ status, busy, onUpdate }) {
+  const s = status.schedule;
+  if (!s) {
+    return null;
+  }
+
+  const canUpdate = !!window.kopiaUI?.installImageSchedule;
+
+  return (
+    <>
+      <p data-testid="schedule-summary">{scheduleSummary(s)}</p>
+      {status.scheduleForThisRepository === false && (
+        <Alert variant="warning" data-testid="schedule-other-repository">
+          <FontAwesomeIcon icon={faExclamationTriangle} /> The scheduled images go to another repository
+          {s.repository ? ", " + s.repository : ""}. Changing the schedule here makes them go to this one.
+        </Alert>
+      )}
+      {s.kopiaVersion && status.kopiaVersion && s.kopiaVersion !== status.kopiaVersion && (
+        <Alert variant="warning" data-testid="schedule-outdated">
+          <FontAwesomeIcon icon={faExclamationTriangle} /> The scheduled tasks run kopia {s.kopiaVersion}; this is kopia{" "}
+          {status.kopiaVersion}.{" "}
+          {canUpdate ? (
+            <Button size="sm" variant="warning" disabled={busy} onClick={onUpdate} data-testid="update-schedule">
+              Update the Tasks
+            </Button>
+          ) : (
+            <>
+              Run <code>kopia image schedule install</code> again in an administrator command prompt.
+            </>
+          )}
+        </Alert>
+      )}
+    </>
+  );
+}
+
+function ImageStatus({ status, bytesStringBase2, onRun, onEdit, onRemove, onUpdate, busy, message }) {
   if (!status.supported) {
     return (
       <Alert variant="info">
@@ -222,6 +263,7 @@ function ImageStatus({ status, bytesStringBase2, onRun, running, message }) {
 
   const createTask = status.tasks[0];
   const taskRunning = createTask?.status === "Running";
+  const scheduled = createTask?.scheduled;
 
   return (
     <Card className="mb-3">
@@ -235,21 +277,31 @@ function ImageStatus({ status, bytesStringBase2, onRun, running, message }) {
               size="sm"
               variant="primary"
               data-testid="run-image-task"
-              disabled={!createTask?.scheduled || taskRunning || running}
+              disabled={!scheduled || taskRunning || busy}
               onClick={onRun}
               title="Create images of this computer's disks now, with the scheduled task's settings"
             >
-              {running || taskRunning ? <Spinner size="sm" animation="border" /> : null} Create Image Now
+              {busy || taskRunning ? <Spinner size="sm" animation="border" /> : null} Create Image Now
             </Button>
+            <Button size="sm" variant="secondary" data-testid="edit-schedule" disabled={busy} onClick={onEdit}>
+              {scheduled ? "Change Schedule..." : "Set Up Schedule..."}
+            </Button>
+            {scheduled && window.kopiaUI?.removeImageSchedule && (
+              <Button size="sm" variant="secondary" data-testid="remove-schedule" disabled={busy} onClick={onRemove}>
+                Remove Schedule
+              </Button>
+            )}
           </Col>
         </Row>
         {message && <Alert variant={message.variant}>{message.text}</Alert>}
-        {!createTask?.scheduled && !createTask?.error && (
+        {!scheduled && !createTask?.error && (
           <Alert variant="info">
-            <FontAwesomeIcon icon={faInfoCircle} /> Images are not scheduled on this computer. Set them up with{" "}
-            <code>kopia image schedule install C:</code> in an administrator command prompt.
+            <FontAwesomeIcon icon={faInfoCircle} /> Images are not scheduled on this computer. Set them up to create
+            images of its disks automatically.
           </Alert>
         )}
+        {scheduled && <ScheduleSettings status={status} busy={busy} onUpdate={onUpdate} />}
+        {status.scheduleError && <Alert variant="danger">{status.scheduleError}</Alert>}
         <Table size="sm" responsive>
           <thead>
             <tr>
@@ -354,6 +406,7 @@ export function Images() {
   const [error, setError] = useState(null);
   const [running, setRunning] = useState(false);
   const [message, setMessage] = useState(null);
+  const [editing, setEditing] = useState(false);
   const lastRunEndRef = useRef(undefined);
 
   const fetchImages = useCallback(() => {
@@ -395,17 +448,57 @@ export function Images() {
     return () => window.clearInterval(interval);
   }, [fetchStatus]);
 
-  const onRun = () => {
+  // runs an action that may ask for administrator rights, showing its message
+  const act = (action, failure) => {
     setRunning(true);
     setMessage(null);
 
-    runImageTask()
+    action()
       .then(setMessage)
-      .catch((e) => setMessage({ variant: "danger", text: "Unable to start the image task: " + errorText(e) }))
+      .catch((e) => setMessage({ variant: "danger", text: failure + ": " + errorText(e) }))
       .finally(() => {
         setRunning(false);
         fetchStatus();
       });
+  };
+
+  const onRun = () => act(runImageTask, "Unable to start the image task");
+
+  const onRemove = () => {
+    if (!window.confirm("Remove the scheduled image tasks? Images already created stay in the repository.")) {
+      return;
+    }
+
+    act(
+      () =>
+        window.kopiaUI
+          .removeImageSchedule()
+          .then((result) =>
+            result === "canceled"
+              ? { variant: "warning", text: "The administrator prompt was declined, so the schedule did not change." }
+              : { variant: "success", text: "The scheduled image tasks are removed." },
+          ),
+      "Unable to remove the schedule",
+    );
+  };
+
+  const onUpdate = () =>
+    act(
+      () =>
+        window.kopiaUI
+          .installImageSchedule(settingsFromSchedule(status.schedule))
+          .then((result) =>
+            result === "canceled"
+              ? { variant: "warning", text: "The administrator prompt was declined, so the tasks were not updated." }
+              : { variant: "success", text: "The scheduled tasks now run this version of kopia." },
+          ),
+      "Unable to update the tasks",
+    );
+
+  const onSaved = (text) => {
+    setEditing(false);
+    setMessage({ variant: "success", text });
+    fetchStatus();
   };
 
   if (error) {
@@ -422,9 +515,20 @@ export function Images() {
         status={status}
         bytesStringBase2={bytesStringBase2}
         onRun={onRun}
-        running={running}
+        onEdit={() => setEditing(true)}
+        onRemove={onRemove}
+        onUpdate={onUpdate}
+        busy={running}
         message={message}
       />
+      {editing && (
+        <ImageScheduleForm
+          show={editing}
+          initial={settingsFromSchedule(status.schedule)}
+          onHide={() => setEditing(false)}
+          onSaved={onSaved}
+        />
+      )}
       <Row className="mb-2">
         <Col>
           <h5>Images</h5>

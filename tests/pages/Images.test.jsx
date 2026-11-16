@@ -69,8 +69,40 @@ function scheduledStatus(overrides = {}) {
       ],
     },
     recoveryMedia: { builtAt: "2026-11-01T00:00:00Z", kopiaVersion: "v0.1", target: "usb" },
+    schedule: {
+      volumes: ["C:"],
+      at: "02:00",
+      days: ["Monday", "Thursday"],
+      wake: true,
+      allowOnBattery: false,
+      checkDay: "Sunday",
+      checkAt: "12:00",
+      kopiaVersion: "v0.1.0",
+      repository: "NAS",
+    },
+    scheduleForThisRepository: true,
+    kopiaVersion: "v0.1.0",
     ...overrides,
   };
+}
+
+function mockDisks() {
+  axiosMock.onGet("/api/v1/images/disks").reply(200, {
+    supported: true,
+    disks: [
+      {
+        number: 1,
+        model: "SATA SSD",
+        volumes: [{ letter: "D:", label: "Data", fileSystem: "NTFS", size: 1000000000000 }],
+      },
+      {
+        number: 3,
+        model: "NVMe",
+        system: true,
+        volumes: [{ letter: "C:", label: "Windows", fileSystem: "NTFS", size: 1000000000000 }],
+      },
+    ],
+  });
 }
 
 let axiosMock;
@@ -117,7 +149,7 @@ describe("Images page", () => {
     expect(links.some((l) => l.getAttribute("href") === "/snapshots/dir/k1234")).toBe(true);
   });
 
-  test("tells how to schedule images when no task is installed", async () => {
+  test("offers to set up the schedule when no task is installed", async () => {
     mockLists(
       scheduledStatus({
         tasks: [
@@ -126,15 +158,155 @@ describe("Images page", () => {
         ],
         lastRun: undefined,
         recoveryMedia: undefined,
+        schedule: undefined,
       }),
     );
     renderImages();
 
     await waitFor(() => expect(screen.getByText(/Images are not scheduled/)).toBeInTheDocument());
-    expect(screen.getByText("kopia image schedule install C:")).toBeInTheDocument();
+    expect(screen.getByTestId("edit-schedule")).toHaveTextContent("Set Up Schedule...");
+    expect(screen.queryByTestId("remove-schedule")).not.toBeInTheDocument();
     expect(screen.getByText("No image run has completed yet.")).toBeInTheDocument();
     expect(screen.getByText(/No recovery media was built/)).toBeInTheDocument();
     expect(screen.getByTestId("run-image-task")).toBeDisabled();
+  });
+
+  test("shows the schedule settings", async () => {
+    mockLists(scheduledStatus());
+    window.kopiaUI = { removeImageSchedule: vi.fn() };
+    renderImages();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("schedule-summary")).toHaveTextContent(
+        "Images of the disks holding C:, on Monday, Thursday at 02:00; checked Sundays at 12:00.",
+      ),
+    );
+    expect(screen.getByTestId("edit-schedule")).toHaveTextContent("Change Schedule...");
+    expect(screen.getByTestId("remove-schedule")).toBeInTheDocument();
+    expect(screen.queryByTestId("schedule-outdated")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("schedule-other-repository")).not.toBeInTheDocument();
+  });
+
+  test("warns about tasks of another repository", async () => {
+    mockLists(scheduledStatus({ scheduleForThisRepository: false }));
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("schedule-other-repository")).toHaveTextContent("NAS"));
+  });
+
+  test("updates tasks that run an older kopia", async () => {
+    const st = scheduledStatus();
+    st.schedule = { ...st.schedule, kopiaVersion: "v0.0.9" };
+    mockLists(st);
+    window.kopiaUI = { installImageSchedule: vi.fn().mockResolvedValue("done") };
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("schedule-outdated")).toHaveTextContent("v0.0.9"));
+    await userEvent.click(screen.getByTestId("update-schedule"));
+
+    await waitFor(() => expect(screen.getByText(/now run this version of kopia/)).toBeInTheDocument());
+    expect(window.kopiaUI.installImageSchedule).toHaveBeenCalledWith({
+      volumes: ["C:"],
+      at: "02:00",
+      days: ["Monday", "Thursday"],
+      checkDay: "Sunday",
+      checkAt: "12:00",
+      wake: true,
+      allowOnBattery: false,
+    });
+  });
+
+  test("removes the schedule after confirmation", async () => {
+    mockLists(scheduledStatus());
+    window.kopiaUI = { removeImageSchedule: vi.fn().mockResolvedValue("done") };
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("remove-schedule")).toBeEnabled());
+
+    // declined
+    await userEvent.click(screen.getByTestId("remove-schedule"));
+    expect(window.kopiaUI.removeImageSchedule).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByTestId("remove-schedule"));
+    await waitFor(() => expect(screen.getByText(/tasks are removed/)).toBeInTheDocument());
+    expect(window.kopiaUI.removeImageSchedule).toHaveBeenCalledTimes(1);
+
+    confirm.mockRestore();
+  });
+
+  test("sets up the schedule in KopiaUI", async () => {
+    mockLists(
+      scheduledStatus({
+        tasks: [
+          { name: createTask, scheduled: false },
+          { name: checkTask, scheduled: false },
+        ],
+        schedule: undefined,
+      }),
+    );
+    mockDisks();
+    window.kopiaUI = { installImageSchedule: vi.fn().mockResolvedValue("done") };
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("edit-schedule")).toBeEnabled());
+    await userEvent.click(screen.getByTestId("edit-schedule"));
+
+    // the Windows disk is chosen at first
+    await waitFor(() => expect(screen.getByLabelText(/Disk 3 - NVMe/)).toBeChecked());
+    expect(screen.getByLabelText(/Disk 1 - SATA SSD/)).not.toBeChecked();
+
+    await userEvent.click(screen.getByLabelText(/Disk 1 - SATA SSD/));
+
+    // every day at first: unticking Sunday leaves the other days
+    await userEvent.click(screen.getByLabelText("Sun"));
+    await userEvent.selectOptions(screen.getByLabelText("Weekly check"), "none");
+
+    await userEvent.click(screen.getByTestId("save-schedule"));
+
+    await waitFor(() => expect(screen.getByText(/Images are scheduled/)).toBeInTheDocument());
+    expect(window.kopiaUI.installImageSchedule).toHaveBeenCalledWith({
+      volumes: ["C:", "D:"],
+      at: "02:00",
+      days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+      checkDay: "none",
+      checkAt: "12:00",
+      wake: true,
+      allowOnBattery: false,
+    });
+  });
+
+  test("keeps the form open when saving fails", async () => {
+    mockLists(scheduledStatus());
+    mockDisks();
+    window.kopiaUI = {
+      installImageSchedule: vi.fn().mockRejectedValue(new Error("unable to get the repository password")),
+    };
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("edit-schedule")).toBeEnabled());
+    await userEvent.click(screen.getByTestId("edit-schedule"));
+    await waitFor(() => expect(screen.getByLabelText(/Disk 3 - NVMe/)).toBeChecked());
+    await userEvent.click(screen.getByTestId("save-schedule"));
+
+    await waitFor(() => expect(screen.getByText("unable to get the repository password")).toBeInTheDocument());
+    expect(screen.getByTestId("save-schedule")).toBeInTheDocument();
+  });
+
+  test("in a browser, the form shows the command to run", async () => {
+    mockLists(scheduledStatus());
+    mockDisks();
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("edit-schedule")).toBeEnabled());
+    await userEvent.click(screen.getByTestId("edit-schedule"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("schedule-command")).toHaveTextContent(
+        "kopia image schedule install C: --at 02:00 --days Monday,Thursday --check-day Sunday --check-at 12:00 --wake",
+      ),
+    );
+    expect(screen.queryByTestId("save-schedule")).not.toBeInTheDocument();
   });
 
   test("shows a failed run and stale recovery media", async () => {
