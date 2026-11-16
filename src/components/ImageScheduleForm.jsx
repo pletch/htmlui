@@ -330,38 +330,43 @@ ImageScheduleForm.propTypes = {
 };
 
 /**
- * Creates images now, without a schedule. In KopiaUI, after the UAC prompt,
- * a console window runs kopia image create and shows its progress; in a
- * browser the dialog shows the command to run instead.
+ * Reports whether two volume lists name the same drive letters.
  */
-export function CreateImageDialog({ show, onHide, onStarted }) {
+export function sameVolumes(a, b) {
+  return a.length === b.length && a.every((v) => b.includes(v));
+}
+
+/**
+ * Creates images now. The disks of the schedule, if any, are chosen at
+ * first: leaving them so runs the scheduled task, in the background as
+ * SYSTEM. Other disks, or no schedule, run kopia image create in a console
+ * window as administrator, after the UAC prompt; in a browser the dialog
+ * shows the command to run instead.
+ *
+ * onStart(volumes, usesSchedule) returns a promise of the message to show:
+ * a success closes the dialog, anything else stays in it.
+ */
+export function CreateImageDialog({ show, onHide, scheduledVolumes, onStart }) {
   const { disks, error: disksError } = useLocalDisks();
-  const [chosenVolumes, setChosenVolumes] = useState(null);
-  const [error, setError] = useState(null);
+  const [chosenVolumes, setChosenVolumes] = useState(scheduledVolumes?.length ? scheduledVolumes : null);
+  const [message, setMessage] = useState(null);
   const [starting, setStarting] = useState(false);
 
-  const canStart = !!window.kopiaUI?.createImageElevated;
   const volumes = chosenVolumes ?? systemVolumes(disks);
+  const usesSchedule = !!scheduledVolumes?.length && sameVolumes(volumes, scheduledVolumes);
+  const canStart = usesSchedule || !!window.kopiaUI?.createImageElevated;
 
   const start = () => {
     setStarting(true);
-    setError(null);
+    setMessage(null);
 
-    window.kopiaUI
-      .createImageElevated(volumes)
-      .then((status) => {
-        if (status === "canceled") {
-          setError("The administrator prompt was declined, so no image was created.");
-          return;
+    onStart(volumes, usesSchedule)
+      .then((m) => {
+        if (m.variant !== "success") {
+          setMessage(m);
         }
-
-        onStarted(
-          "Creating images of the disks holding " +
-            volumes.join(" ") +
-            " in a console window, which shows the progress; closing it stops the run. The result shows here when it ends.",
-        );
       })
-      .catch((e) => setError(e.message))
+      .catch((e) => setMessage({ variant: "danger", text: e.response?.data?.error || e.message }))
       .finally(() => setStarting(false));
   };
 
@@ -371,13 +376,16 @@ export function CreateImageDialog({ show, onHide, onStarted }) {
         <Modal.Title>Create Image Now</Modal.Title>
       </Modal.Header>
       <Modal.Body>
-        {(error || disksError) && <Alert variant="danger">{error || disksError}</Alert>}
+        {disksError && <Alert variant="danger">{disksError}</Alert>}
+        {message && <Alert variant={message.variant}>{message.text}</Alert>}
         <Form.Group className="mb-3">
           <Form.Label>Disks to image</Form.Label>
           <DiskChecks disks={disks} volumes={volumes} onChange={setChosenVolumes} />
         </Form.Group>
-        <p className="text-muted small mb-0">
-          The image runs while you are signed in; a schedule also runs when you are not, and wakes the computer.
+        <p className="text-muted small mb-0" data-testid="create-image-how">
+          {usesSchedule
+            ? "These are the scheduled disks: the scheduled task images them in the background, and goes on when you sign out."
+            : "The image is created in a console window, which shows its progress, while you are signed in."}
         </p>
         {!canStart && (
           <Alert variant="info" className="mt-3">
@@ -399,7 +407,7 @@ export function CreateImageDialog({ show, onHide, onStarted }) {
             data-testid="start-image"
             disabled={starting || volumes.length === 0}
             onClick={start}
-            title="Asks for administrator rights"
+            title="May ask for administrator rights"
           >
             {starting && <Spinner size="sm" animation="border" />} Create Image
           </Button>
@@ -412,5 +420,6 @@ export function CreateImageDialog({ show, onHide, onStarted }) {
 CreateImageDialog.propTypes = {
   show: PropTypes.bool.isRequired,
   onHide: PropTypes.func.isRequired,
-  onStarted: PropTypes.func.isRequired,
+  scheduledVolumes: PropTypes.array,
+  onStart: PropTypes.func.isRequired,
 };

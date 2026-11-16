@@ -537,21 +537,38 @@ export function Images() {
       });
   };
 
-  // with a schedule, its task creates the images; without one, the dialog
-  // chooses the disks
-  const onRun = () => {
-    if (status.tasks[0]?.scheduled) {
-      act(runImageTask, "Unable to start the image task");
-      return;
-    }
+  const onRun = () => setCreating(true);
 
-    setCreating(true);
+  // the scheduled disks run the scheduled task; other disks, or no schedule,
+  // run kopia image create in a console window
+  const startImage = (volumes, usesSchedule) => {
+    const started = usesSchedule
+      ? runImageTask()
+      : window.kopiaUI.createImageElevated(volumes).then((result) =>
+          result === "canceled"
+            ? { variant: "warning", text: "The administrator prompt was declined, so no image was created." }
+            : {
+                variant: "success",
+                text:
+                  "Creating images of the disks holding " +
+                  volumes.join(" ") +
+                  " in a console window, which shows the progress; closing it stops the run. The result shows here when it ends.",
+              },
+        );
+
+    return started.then((m) => {
+      if (m.variant === "success") {
+        setCreating(false);
+        setMessage(m);
+        fetchStatus();
+      }
+
+      return m;
+    });
   };
 
-  const onImageStarted = (text) => {
-    setCreating(false);
-    setMessage({ variant: "success", text });
-  };
+  // the schedule's disks, when the tasks are installed and their settings known
+  const scheduledVolumes = status?.tasks[0]?.scheduled ? status?.schedule?.volumes : undefined;
 
   const onCreateRecoveryMedia = () =>
     act(
@@ -633,7 +650,14 @@ export function Images() {
           onSaved={onSaved}
         />
       )}
-      {creating && <CreateImageDialog show={creating} onHide={() => setCreating(false)} onStarted={onImageStarted} />}
+      {creating && (
+        <CreateImageDialog
+          show={creating}
+          onHide={() => setCreating(false)}
+          scheduledVolumes={scheduledVolumes}
+          onStart={startImage}
+        />
+      )}
       <Row className="mb-2">
         <Col>
           <h5>Images</h5>

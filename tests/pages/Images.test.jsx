@@ -86,6 +86,15 @@ function scheduledStatus(overrides = {}) {
   };
 }
 
+// Create Image Now with the scheduled disks, which runs the scheduled task
+async function startScheduledImage() {
+  mockDisks();
+  await userEvent.click(screen.getByTestId("run-image-task"));
+  await waitFor(() => expect(screen.getByLabelText(/Disk 3 - NVMe/)).toBeChecked());
+  expect(screen.getByTestId("create-image-how")).toHaveTextContent("scheduled task");
+  await userEvent.click(screen.getByTestId("start-image"));
+}
+
 function mockDisks() {
   axiosMock.onGet("/api/v1/images/disks").reply(200, {
     supported: true,
@@ -340,7 +349,7 @@ describe("Images page", () => {
     renderImages();
 
     await waitFor(() => expect(screen.getByTestId("run-image-task")).toBeEnabled());
-    await userEvent.click(screen.getByTestId("run-image-task"));
+    await startScheduledImage();
 
     await waitFor(() => expect(screen.getByText(/Started the image task/)).toBeInTheDocument());
     expect(axiosMock.history.post).toHaveLength(1);
@@ -353,7 +362,7 @@ describe("Images page", () => {
     renderImages();
 
     await waitFor(() => expect(screen.getByTestId("run-image-task")).toBeEnabled());
-    await userEvent.click(screen.getByTestId("run-image-task"));
+    await startScheduledImage();
 
     await waitFor(() => expect(screen.getByText(/Started the image task/)).toBeInTheDocument());
     expect(window.kopiaUI.runImageTaskElevated).toHaveBeenCalledTimes(1);
@@ -366,7 +375,7 @@ describe("Images page", () => {
     renderImages();
 
     await waitFor(() => expect(screen.getByTestId("run-image-task")).toBeEnabled());
-    await userEvent.click(screen.getByTestId("run-image-task"));
+    await startScheduledImage();
 
     await waitFor(() => expect(screen.getByText(/administrator prompt was declined/)).toBeInTheDocument());
   });
@@ -377,7 +386,7 @@ describe("Images page", () => {
     renderImages();
 
     await waitFor(() => expect(screen.getByTestId("run-image-task")).toBeEnabled());
-    await userEvent.click(screen.getByTestId("run-image-task"));
+    await startScheduledImage();
 
     await waitFor(() => expect(screen.getByText(/needs administrator rights/)).toBeInTheDocument());
   });
@@ -390,11 +399,9 @@ describe("Images page", () => {
     renderImages();
 
     await waitFor(() => expect(screen.getByTestId("run-image-task")).toBeEnabled());
-    await userEvent.click(screen.getByTestId("run-image-task"));
+    await startScheduledImage();
 
-    await waitFor(() =>
-      expect(screen.getByText(/Unable to start the image task: the image task is not scheduled/)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/the image task is not scheduled/)).toBeInTheDocument());
   });
 
   test("lists the images of every computer", async () => {
@@ -426,7 +433,7 @@ describe("Images page", () => {
     expect(screen.getByTestId("schedule-summary")).toBeInTheDocument();
 
     // the task starts as administrator
-    await userEvent.click(screen.getByTestId("run-image-task"));
+    await startScheduledImage();
     await waitFor(() => expect(screen.getByText(/Started the image task/)).toBeInTheDocument());
     expect(window.kopiaUI.runImageTaskElevated).toHaveBeenCalledTimes(1);
   });
@@ -454,6 +461,34 @@ describe("Images page", () => {
 
     await waitFor(() => expect(screen.getByText(/in a console window/)).toBeInTheDocument());
     expect(window.kopiaUI.createImageElevated).toHaveBeenCalledWith(["C:"]);
+    expect(axiosMock.history.post).toHaveLength(0);
+  });
+
+  test("asks which disks to image even with a schedule", async () => {
+    mockLists(scheduledStatus());
+    mockDisks();
+    window.kopiaUI = {
+      createImageElevated: vi.fn().mockResolvedValue("started"),
+      runImageTaskElevated: vi.fn(),
+    };
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("run-image-task")).toBeEnabled());
+    await userEvent.click(screen.getByTestId("run-image-task"));
+
+    // the scheduled disk at first, which would run the scheduled task
+    await waitFor(() => expect(screen.getByLabelText(/Disk 3 - NVMe/)).toBeChecked());
+    expect(screen.getByTestId("create-image-how")).toHaveTextContent("scheduled task");
+
+    // another disk too: the image runs in a console window instead
+    await userEvent.click(screen.getByLabelText(/Disk 1 - SATA SSD/));
+    expect(screen.getByTestId("create-image-how")).toHaveTextContent("console window");
+
+    await userEvent.click(screen.getByTestId("start-image"));
+
+    await waitFor(() => expect(screen.getByText(/Creating images of the disks holding C: D:/)).toBeInTheDocument());
+    expect(window.kopiaUI.createImageElevated).toHaveBeenCalledWith(["C:", "D:"]);
+    expect(window.kopiaUI.runImageTaskElevated).not.toHaveBeenCalled();
     expect(axiosMock.history.post).toHaveLength(0);
   });
 
