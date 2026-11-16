@@ -10,7 +10,7 @@ import { Link, useNavigate, useLocation } from "react-router";
 import KopiaTable from "../components/KopiaTable";
 import { CLIEquivalent } from "../components/CLIEquivalent";
 import { compare, objectLink, parseQuery, rfc3339TimestampForDisplay } from "../utils/formatutils";
-import { errorAlert, redirect, sizeWithFailures } from "../utils/uiutil";
+import { errorAlert, redirect, sizeWithFailures, uploadedBytesCell } from "../utils/uiutil";
 import { sourceQueryStringParams } from "../utils/policyutil";
 import { GoBackButton } from "../components/GoBackButton";
 import { faSync, faThumbtack } from "@fortawesome/free-solid-svg-icons";
@@ -436,6 +436,12 @@ class SnapshotHistoryInternal extends Component {
         accessorFn: (x) => x.summary?.size ?? 0,
         width: 100,
         cell: (x) => sizeWithFailures(x.cell.getValue(), x.row.original.summary, bytesStringBase2),
+      },
+      {
+        header: "Uploaded",
+        accessorFn: (x) => x.uploadedBytes ?? -1,
+        width: 100,
+        cell: (x) => uploadedBytesCell(x.cell.getValue(), bytesStringBase2),
       },
       {
         header: "Files",
