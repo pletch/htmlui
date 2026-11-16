@@ -93,53 +93,106 @@ function diskLabel(d, bytesStringBase2) {
 }
 
 /**
+ * Lists the disks of the server's computer that can be imaged.
+ *
+ * @returns {{disks: Array|null, error: string|null}} disks is null while listing
+ */
+export function useLocalDisks() {
+  const [disks, setDisks] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    axios
+      .get("/api/v1/images/disks")
+      .then((result) => setDisks(result.data.disks || []))
+      .catch((e) => setError("Unable to list the disks: " + (e.response?.data?.error || e.message)));
+  }, []);
+
+  return { disks, error };
+}
+
+/**
+ * Returns the volume that names the Windows disk, to image when nothing else
+ * was chosen.
+ */
+export function systemVolumes(disks) {
+  const system = (disks || []).find((d) => d.system);
+  return system ? [system.volumes[0].letter] : [];
+}
+
+/**
+ * Checkboxes for the disks to image; volumes holds one drive letter for each
+ * disk chosen.
+ */
+export function DiskChecks({ disks, volumes, onChange }) {
+  const { bytesStringBase2 } = use(UIPreferencesContext);
+
+  if (disks === null) {
+    return (
+      <div>
+        <Spinner size="sm" animation="border" /> Listing disks ...
+      </div>
+    );
+  }
+
+  // a disk is chosen when one of its letters is in the volumes
+  const chosen = (d) => d.volumes.some((v) => volumes.includes(v.letter));
+
+  const toggle = (d) => {
+    const letters = d.volumes.map((v) => v.letter);
+    const others = volumes.filter((v) => !letters.includes(v));
+    onChange(chosen(d) ? others : [...others, letters[0]]);
+  };
+
+  return (
+    <>
+      {disks.map((d) => (
+        <Form.Check
+          key={d.number}
+          type="checkbox"
+          id={"image-disk-" + d.number}
+          checked={chosen(d)}
+          onChange={() => toggle(d)}
+          label={
+            <>
+              {diskLabel(d, bytesStringBase2)} {d.system && <Badge bg="secondary">Windows</Badge>}
+            </>
+          }
+        />
+      ))}
+      <Form.Text>Each disk is imaged whole, with all its partitions.</Form.Text>
+    </>
+  );
+}
+
+DiskChecks.propTypes = {
+  disks: PropTypes.array,
+  volumes: PropTypes.array.isRequired,
+  onChange: PropTypes.func.isRequired,
+};
+
+/**
  * Edits the image schedule. KopiaUI saves it as administrator after the UAC
  * prompt; in a browser the form shows the command to run instead.
  */
 export function ImageScheduleForm({ show, initial, onHide, onSaved }) {
-  const { bytesStringBase2 } = use(UIPreferencesContext);
+  const { disks, error: disksError } = useLocalDisks();
   const [settings, setSettings] = useState(initial);
-  const [disks, setDisks] = useState(null);
+  const [chosenVolumes, setChosenVolumes] = useState(initial.volumes.length > 0 ? initial.volumes : null);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
 
   const canSave = !!window.kopiaUI?.installImageSchedule;
-  const noVolumes = initial.volumes.length === 0;
 
-  // the page mounts the form each time it opens, so this runs once per edit
-  useEffect(() => {
-    axios
-      .get("/api/v1/images/disks")
-      .then((result) => {
-        const list = result.data.disks || [];
-        setDisks(list);
-
-        // the system disk unless the schedule says otherwise
-        if (noVolumes) {
-          const system = list.find((d) => d.system);
-          if (system) {
-            setSettings((s) => ({ ...s, volumes: [system.volumes[0].letter] }));
-          }
-        }
-      })
-      .catch((e) => setError("Unable to list the disks: " + (e.response?.data?.error || e.message)));
-  }, [noVolumes]);
+  // the Windows disk until a disk is chosen
+  const current = { ...settings, volumes: chosenVolumes ?? systemVolumes(disks) };
 
   const set = (field, value) => setSettings((s) => ({ ...s, [field]: value }));
 
-  // a disk is chosen when one of its letters is in the volumes
-  const diskChosen = (d) => d.volumes.some((v) => settings.volumes.includes(v.letter));
-
-  const toggleDisk = (d) => {
-    const letters = d.volumes.map((v) => v.letter);
-    const others = settings.volumes.filter((v) => !letters.includes(v));
-    set("volumes", diskChosen(d) ? others : [...others, letters[0]]);
-  };
-
   // no days means every day
   const toggleDay = (day) => {
-    const current = settings.days.length === 0 ? weekdays : settings.days;
-    const next = current.includes(day) ? current.filter((x) => x !== day) : [...current, day];
+    const days = settings.days.length === 0 ? weekdays : settings.days;
+    const next = days.includes(day) ? days.filter((x) => x !== day) : [...days, day];
 
     if (next.length === 0) {
       return;
@@ -153,14 +206,14 @@ export function ImageScheduleForm({ show, initial, onHide, onSaved }) {
     setError(null);
 
     window.kopiaUI
-      .installImageSchedule(settings)
+      .installImageSchedule(current)
       .then((status) => {
         if (status === "canceled") {
           setError("The administrator prompt was declined, so the schedule did not change.");
           return;
         }
 
-        onSaved("Images are scheduled. " + scheduleSummary(settings));
+        onSaved("Images are scheduled. " + scheduleSummary(current));
       })
       .catch((e) => setError(e.message))
       .finally(() => setSaving(false));
@@ -174,30 +227,10 @@ export function ImageScheduleForm({ show, initial, onHide, onSaved }) {
         <Modal.Title>Image Schedule</Modal.Title>
       </Modal.Header>
       <Modal.Body>
-        {error && <Alert variant="danger">{error}</Alert>}
+        {(error || disksError) && <Alert variant="danger">{error || disksError}</Alert>}
         <Form.Group className="mb-3">
           <Form.Label>Disks to image</Form.Label>
-          {disks === null ? (
-            <div>
-              <Spinner size="sm" animation="border" /> Listing disks ...
-            </div>
-          ) : (
-            disks.map((d) => (
-              <Form.Check
-                key={d.number}
-                type="checkbox"
-                id={"image-disk-" + d.number}
-                checked={diskChosen(d)}
-                onChange={() => toggleDisk(d)}
-                label={
-                  <>
-                    {diskLabel(d, bytesStringBase2)} {d.system && <Badge bg="secondary">Windows</Badge>}
-                  </>
-                }
-              />
-            ))
-          )}
-          <Form.Text>Each disk is imaged whole, with all its partitions.</Form.Text>
+          <DiskChecks disks={disks} volumes={current.volumes} onChange={setChosenVolumes} />
         </Form.Group>
         <Row className="mb-3">
           <Form.Group as={Col} xs="auto" controlId="image-schedule-at">
@@ -263,7 +296,7 @@ export function ImageScheduleForm({ show, initial, onHide, onSaved }) {
           <Alert variant="info" className="mt-3">
             Run this in an administrator command prompt on this computer:
             <pre className="mb-0 mt-2" data-testid="schedule-command">
-              {scheduleCommand(settings)}
+              {scheduleCommand(current)}
             </pre>
           </Alert>
         )}
@@ -277,7 +310,7 @@ export function ImageScheduleForm({ show, initial, onHide, onSaved }) {
             size="sm"
             variant="primary"
             data-testid="save-schedule"
-            disabled={saving || settings.volumes.length === 0}
+            disabled={saving || current.volumes.length === 0}
             onClick={save}
             title="Asks for administrator rights"
           >
@@ -294,4 +327,90 @@ ImageScheduleForm.propTypes = {
   initial: PropTypes.object.isRequired,
   onHide: PropTypes.func.isRequired,
   onSaved: PropTypes.func.isRequired,
+};
+
+/**
+ * Creates images now, without a schedule. In KopiaUI, after the UAC prompt,
+ * a console window runs kopia image create and shows its progress; in a
+ * browser the dialog shows the command to run instead.
+ */
+export function CreateImageDialog({ show, onHide, onStarted }) {
+  const { disks, error: disksError } = useLocalDisks();
+  const [chosenVolumes, setChosenVolumes] = useState(null);
+  const [error, setError] = useState(null);
+  const [starting, setStarting] = useState(false);
+
+  const canStart = !!window.kopiaUI?.createImageElevated;
+  const volumes = chosenVolumes ?? systemVolumes(disks);
+
+  const start = () => {
+    setStarting(true);
+    setError(null);
+
+    window.kopiaUI
+      .createImageElevated(volumes)
+      .then((status) => {
+        if (status === "canceled") {
+          setError("The administrator prompt was declined, so no image was created.");
+          return;
+        }
+
+        onStarted(
+          "Creating images of the disks holding " +
+            volumes.join(" ") +
+            " in a console window, which shows the progress; closing it stops the run. The result shows here when it ends.",
+        );
+      })
+      .catch((e) => setError(e.message))
+      .finally(() => setStarting(false));
+  };
+
+  return (
+    <Modal show={show} onHide={onHide}>
+      <Modal.Header closeButton>
+        <Modal.Title>Create Image Now</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        {(error || disksError) && <Alert variant="danger">{error || disksError}</Alert>}
+        <Form.Group className="mb-3">
+          <Form.Label>Disks to image</Form.Label>
+          <DiskChecks disks={disks} volumes={volumes} onChange={setChosenVolumes} />
+        </Form.Group>
+        <p className="text-muted small mb-0">
+          The image runs while you are signed in; a schedule also runs when you are not, and wakes the computer.
+        </p>
+        {!canStart && (
+          <Alert variant="info" className="mt-3">
+            Run this in an administrator command prompt on this computer:
+            <pre className="mb-0 mt-2" data-testid="create-image-command">
+              kopia image create {volumes.join(" ")}
+            </pre>
+          </Alert>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button size="sm" variant="secondary" onClick={onHide}>
+          {canStart ? "Cancel" : "Close"}
+        </Button>
+        {canStart && (
+          <Button
+            size="sm"
+            variant="primary"
+            data-testid="start-image"
+            disabled={starting || volumes.length === 0}
+            onClick={start}
+            title="Asks for administrator rights"
+          >
+            {starting && <Spinner size="sm" animation="border" />} Create Image
+          </Button>
+        )}
+      </Modal.Footer>
+    </Modal>
+  );
+}
+
+CreateImageDialog.propTypes = {
+  show: PropTypes.bool.isRequired,
+  onHide: PropTypes.func.isRequired,
+  onStarted: PropTypes.func.isRequired,
 };

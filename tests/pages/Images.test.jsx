@@ -134,7 +134,7 @@ describe("Images page", () => {
     mockLists(scheduledStatus());
     renderImages();
 
-    await waitFor(() => expect(screen.getByText("Scheduled images")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Disk images of this computer")).toBeInTheDocument());
 
     expect(screen.getByText("Disk 0f6ab3f2-1c3d-4e5f-8a9b-0c1d2e3f4a51")).toBeInTheDocument();
     expect(screen.getByText("p3-C.img")).toBeInTheDocument();
@@ -168,7 +168,7 @@ describe("Images page", () => {
     expect(screen.queryByTestId("remove-schedule")).not.toBeInTheDocument();
     expect(screen.getByText("No image run has completed yet.")).toBeInTheDocument();
     expect(screen.getByText(/No recovery media was built/)).toBeInTheDocument();
-    expect(screen.getByTestId("run-image-task")).toBeDisabled();
+    expect(screen.getByTestId("run-image-task")).toBeEnabled();
   });
 
   test("shows the schedule settings", async () => {
@@ -409,6 +409,101 @@ describe("Images page", () => {
 
     await waitFor(() => expect(screen.getByText("laptop")).toBeInTheDocument());
     expect(screen.getByText("Computer")).toBeInTheDocument();
+  });
+
+  test("shows tasks that Task Scheduler hides as scheduled", async () => {
+    const st = scheduledStatus();
+    st.tasks = [
+      { name: createTask, scheduled: true, statusHidden: true },
+      { name: checkTask, scheduled: true, statusHidden: true },
+    ];
+    mockLists(st);
+    axiosMock.onPost("/api/v1/images/schedule/run").reply(403, { code: "ACCESS_DENIED", error: "needs admin" });
+    window.kopiaUI = { runImageTaskElevated: vi.fn().mockResolvedValue("started") };
+    renderImages();
+
+    await waitFor(() => expect(screen.getAllByTestId("task-status-hidden")).toHaveLength(2));
+    expect(screen.getByTestId("schedule-summary")).toBeInTheDocument();
+
+    // the task starts as administrator
+    await userEvent.click(screen.getByTestId("run-image-task"));
+    await waitFor(() => expect(screen.getByText(/Started the image task/)).toBeInTheDocument());
+    expect(window.kopiaUI.runImageTaskElevated).toHaveBeenCalledTimes(1);
+  });
+
+  test("creates an image without a schedule in KopiaUI", async () => {
+    mockLists(
+      scheduledStatus({
+        tasks: [
+          { name: createTask, scheduled: false },
+          { name: checkTask, scheduled: false },
+        ],
+        schedule: undefined,
+      }),
+    );
+    mockDisks();
+    window.kopiaUI = { createImageElevated: vi.fn().mockResolvedValue("started") };
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("run-image-task")).toBeEnabled());
+    await userEvent.click(screen.getByTestId("run-image-task"));
+
+    // the Windows disk is chosen at first
+    await waitFor(() => expect(screen.getByLabelText(/Disk 3 - NVMe/)).toBeChecked());
+    await userEvent.click(screen.getByTestId("start-image"));
+
+    await waitFor(() => expect(screen.getByText(/in a console window/)).toBeInTheDocument());
+    expect(window.kopiaUI.createImageElevated).toHaveBeenCalledWith(["C:"]);
+    expect(axiosMock.history.post).toHaveLength(0);
+  });
+
+  test("keeps the create dialog open when the prompt is declined", async () => {
+    mockLists(scheduledStatus({ tasks: [{ name: createTask, scheduled: false }], schedule: undefined }));
+    mockDisks();
+    window.kopiaUI = { createImageElevated: vi.fn().mockResolvedValue("canceled") };
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("run-image-task")).toBeEnabled());
+    await userEvent.click(screen.getByTestId("run-image-task"));
+    await waitFor(() => expect(screen.getByLabelText(/Disk 3 - NVMe/)).toBeChecked());
+    await userEvent.click(screen.getByTestId("start-image"));
+
+    await waitFor(() => expect(screen.getByText(/no image was created/)).toBeInTheDocument());
+    expect(screen.getByTestId("start-image")).toBeInTheDocument();
+  });
+
+  test("in a browser, the create dialog shows the command to run", async () => {
+    mockLists(scheduledStatus({ tasks: [{ name: createTask, scheduled: false }], schedule: undefined }));
+    mockDisks();
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("run-image-task")).toBeEnabled());
+    await userEvent.click(screen.getByTestId("run-image-task"));
+
+    await waitFor(() => expect(screen.getByTestId("create-image-command")).toHaveTextContent("kopia image create C:"));
+    expect(screen.queryByTestId("start-image")).not.toBeInTheDocument();
+  });
+
+  test("builds recovery media from the page", async () => {
+    mockLists(scheduledStatus({ recoveryMedia: undefined }));
+    window.kopiaUI = { createRecoveryMediaElevated: vi.fn().mockResolvedValue("started") };
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("create-recovery-media")).toBeEnabled());
+    expect(screen.getByText(/No recovery media was built/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId("create-recovery-media"));
+
+    await waitFor(() => expect(screen.getByText(/Building recovery media in a console window/)).toBeInTheDocument());
+    expect(window.kopiaUI.createRecoveryMediaElevated).toHaveBeenCalledTimes(1);
+  });
+
+  test("in a browser, tells how to build recovery media", async () => {
+    mockLists(scheduledStatus());
+    renderImages();
+
+    await waitFor(() => expect(screen.getByText("kopia image recovery-media create")).toBeInTheDocument());
+    expect(screen.queryByTestId("create-recovery-media")).not.toBeInTheDocument();
   });
 });
 

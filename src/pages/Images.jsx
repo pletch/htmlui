@@ -13,7 +13,12 @@ import Row from "react-bootstrap/Row";
 import Spinner from "react-bootstrap/Spinner";
 import Table from "react-bootstrap/Table";
 import { Link } from "react-router";
-import { ImageScheduleForm, scheduleSummary, settingsFromSchedule } from "../components/ImageScheduleForm";
+import {
+  CreateImageDialog,
+  ImageScheduleForm,
+  scheduleSummary,
+  settingsFromSchedule,
+} from "../components/ImageScheduleForm";
 import KopiaTable from "../components/KopiaTable";
 import { UIPreferencesContext } from "../contexts/UIPreferencesContext";
 import { formatDuration, objectLink, sizeDisplayName } from "../utils/formatutils";
@@ -119,6 +124,20 @@ function TaskRow({ task }) {
     );
   }
 
+  if (task.statusHidden) {
+    return (
+      <tr>
+        <td>{task.name}</td>
+        <td colSpan={4} data-testid="task-status-hidden">
+          Scheduled{" "}
+          <span className="text-muted">
+            (Task Scheduler shows the status of tasks that run as SYSTEM only to administrators)
+          </span>
+        </td>
+      </tr>
+    );
+  }
+
   return (
     <tr>
       <td>{task.name}</td>
@@ -169,28 +188,70 @@ function LastRun({ status, bytesStringBase2 }) {
   );
 }
 
-function RecoveryMedia({ status }) {
+/**
+ * The recovery media heading, with the button that builds new media: in
+ * KopiaUI it opens a console window as administrator, in a browser it tells
+ * the command to run.
+ */
+function RecoveryMediaHeading({ busy, onCreate }) {
+  const canCreate = !!window.kopiaUI?.createRecoveryMediaElevated;
+
+  return (
+    <Row className="mb-2 align-items-center">
+      <Col>
+        <h6 className="mb-0">Recovery media</h6>
+      </Col>
+      <Col xs="auto">
+        {canCreate ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            data-testid="create-recovery-media"
+            disabled={busy}
+            onClick={onCreate}
+            title="Make a USB stick that restores this computer's disk images; asks for administrator rights"
+          >
+            Create Recovery Media...
+          </Button>
+        ) : (
+          <span className="text-muted small">
+            Build it with <code>kopia image recovery-media create</code> in an administrator command prompt.
+          </span>
+        )}
+      </Col>
+    </Row>
+  );
+}
+
+function RecoveryMedia({ status, busy, onCreate }) {
   const findings = status.lastRun?.recoveryMedia || [];
   const media = status.recoveryMedia;
-  const howToBuild = window.kopiaUI
-    ? "Build it with Create Recovery Media in the KopiaUI tray menu."
-    : "Build it with 'kopia image recovery-media create' in an administrator command prompt.";
+  const heading = <RecoveryMediaHeading busy={busy} onCreate={onCreate} />;
 
   if (status.recoveryMediaError) {
-    return <Alert variant="danger">Unable to read the recovery media record: {status.recoveryMediaError}</Alert>;
+    return (
+      <>
+        {heading}
+        <Alert variant="danger">Unable to read the recovery media record: {status.recoveryMediaError}</Alert>
+      </>
+    );
   }
 
   if (!media) {
     return (
-      <Alert variant="warning">
-        <FontAwesomeIcon icon={faExclamationTriangle} /> No recovery media was built on this computer. Without it, the
-        system disk can only be restored from a Linux live system. {howToBuild}
-      </Alert>
+      <>
+        {heading}
+        <Alert variant="warning">
+          <FontAwesomeIcon icon={faExclamationTriangle} /> No recovery media was built on this computer. Without it, the
+          system disk can only be restored from a Linux live system.
+        </Alert>
+      </>
     );
   }
 
   return (
     <>
+      {heading}
       <p>
         Built <span title={moment(media.builtAt).toLocaleString()}>{moment(media.builtAt).fromNow()}</span> with kopia{" "}
         {media.kopiaVersion}, written to {media.target}.
@@ -198,8 +259,8 @@ function RecoveryMedia({ status }) {
       </p>
       {findings.length > 0 && (
         <Alert variant="warning" data-testid="recovery-media-findings">
-          <FontAwesomeIcon icon={faExclamationTriangle} /> The recovery media no longer matches this computer.{" "}
-          {howToBuild}
+          <FontAwesomeIcon icon={faExclamationTriangle} /> The recovery media no longer matches this computer; build new
+          media.
           <ul className="mb-0 mt-2">
             {findings.map((f) => (
               <li key={f}>{f}</li>
@@ -251,7 +312,17 @@ function ScheduleSettings({ status, busy, onUpdate }) {
   );
 }
 
-function ImageStatus({ status, bytesStringBase2, onRun, onEdit, onRemove, onUpdate, busy, message }) {
+function ImageStatus({
+  status,
+  bytesStringBase2,
+  onRun,
+  onEdit,
+  onRemove,
+  onUpdate,
+  onCreateRecoveryMedia,
+  busy,
+  message,
+}) {
   if (!status.supported) {
     return (
       <Alert variant="info">
@@ -270,16 +341,20 @@ function ImageStatus({ status, bytesStringBase2, onRun, onEdit, onRemove, onUpda
       <Card.Body>
         <Row className="mb-2">
           <Col>
-            <h5>Scheduled images</h5>
+            <h5>Disk images of this computer</h5>
           </Col>
           <Col xs="auto">
             <Button
               size="sm"
               variant="primary"
               data-testid="run-image-task"
-              disabled={!scheduled || taskRunning || busy}
+              disabled={taskRunning || busy}
               onClick={onRun}
-              title="Create images of this computer's disks now, with the scheduled task's settings"
+              title={
+                scheduled
+                  ? "Create images of this computer's disks now, with the scheduled task's settings"
+                  : "Create images of this computer's disks now; asks for administrator rights"
+              }
             >
               {busy || taskRunning ? <Spinner size="sm" animation="border" /> : null} Create Image Now
             </Button>
@@ -296,8 +371,8 @@ function ImageStatus({ status, bytesStringBase2, onRun, onEdit, onRemove, onUpda
         {message && <Alert variant={message.variant}>{message.text}</Alert>}
         {!scheduled && !createTask?.error && (
           <Alert variant="info">
-            <FontAwesomeIcon icon={faInfoCircle} /> Images are not scheduled on this computer. Set them up to create
-            images of its disks automatically.
+            <FontAwesomeIcon icon={faInfoCircle} /> Images are not scheduled on this computer. Create one now, or set up
+            a schedule to create them automatically.
           </Alert>
         )}
         {scheduled && <ScheduleSettings status={status} busy={busy} onUpdate={onUpdate} />}
@@ -320,8 +395,7 @@ function ImageStatus({ status, bytesStringBase2, onRun, onEdit, onRemove, onUpda
         </Table>
         <h6>Last image run</h6>
         <LastRun status={status} bytesStringBase2={bytesStringBase2} />
-        <h6>Recovery media</h6>
-        <RecoveryMedia status={status} />
+        <RecoveryMedia status={status} busy={busy} onCreate={onCreateRecoveryMedia} />
       </Card.Body>
     </Card>
   );
@@ -407,6 +481,7 @@ export function Images() {
   const [running, setRunning] = useState(false);
   const [message, setMessage] = useState(null);
   const [editing, setEditing] = useState(false);
+  const [creating, setCreating] = useState(false);
   const lastRunEndRef = useRef(undefined);
 
   const fetchImages = useCallback(() => {
@@ -462,7 +537,35 @@ export function Images() {
       });
   };
 
-  const onRun = () => act(runImageTask, "Unable to start the image task");
+  // with a schedule, its task creates the images; without one, the dialog
+  // chooses the disks
+  const onRun = () => {
+    if (status.tasks[0]?.scheduled) {
+      act(runImageTask, "Unable to start the image task");
+      return;
+    }
+
+    setCreating(true);
+  };
+
+  const onImageStarted = (text) => {
+    setCreating(false);
+    setMessage({ variant: "success", text });
+  };
+
+  const onCreateRecoveryMedia = () =>
+    act(
+      () =>
+        window.kopiaUI.createRecoveryMediaElevated().then((result) =>
+          result === "canceled"
+            ? { variant: "warning", text: "The administrator prompt was declined, so no media was built." }
+            : {
+                variant: "success",
+                text: "Building recovery media in a console window: it asks which USB disk to erase. The result shows here when it ends.",
+              },
+        ),
+      "Unable to start building recovery media",
+    );
 
   const onRemove = () => {
     if (!window.confirm("Remove the scheduled image tasks? Images already created stay in the repository.")) {
@@ -518,6 +621,7 @@ export function Images() {
         onEdit={() => setEditing(true)}
         onRemove={onRemove}
         onUpdate={onUpdate}
+        onCreateRecoveryMedia={onCreateRecoveryMedia}
         busy={running}
         message={message}
       />
@@ -529,6 +633,7 @@ export function Images() {
           onSaved={onSaved}
         />
       )}
+      {creating && <CreateImageDialog show={creating} onHide={() => setCreating(false)} onStarted={onImageStarted} />}
       <Row className="mb-2">
         <Col>
           <h5>Images</h5>
