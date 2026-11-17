@@ -30,6 +30,7 @@ export function Preferences() {
               >
                 <option value="light">light</option>
                 <option value="dark">dark</option>
+                <option value="linear">linear</option>
                 <option value="pastel">pastel</option>
                 <option value="ocean">ocean</option>
               </select>
