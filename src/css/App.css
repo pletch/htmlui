@@ -906,3 +906,43 @@ html.fs-4 {
 #kopia .tab-pane.active {
   font-weight: normal;
 }
+
+/* Repository selector at the top of the sidebar, in KopiaUI. */
+.app-repo-selector {
+  margin: 0 0 10px;
+}
+
+#kopia .app-repo-selector .app-repo-selector-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 6px 10px;
+  text-align: left;
+  color: var(--color-text-nav);
+  background-color: transparent;
+  border: 1px solid var(--color-sidebar-border, rgba(0, 0, 0, 0.15));
+  border-radius: 6px;
+}
+
+#kopia .app-repo-selector .app-repo-selector-toggle:hover {
+  filter: none;
+  background-color: var(--color-sidebar-hover, rgba(0, 0, 0, 0.05));
+}
+
+.app-repo-selector-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-repo-selector .dropdown-menu {
+  max-width: 360px;
+}
+
+.app-repo-selector .dropdown-item {
+  white-space: normal;
+}
