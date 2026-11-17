@@ -278,8 +278,11 @@ function RecoveryMedia({ status, busy, onCreate }) {
       {heading}
       {media.builtOn ? (
         <p data-testid="recovery-media-shared">
-          Built on {media.builtOn} {builtAt} with kopia {media.kopiaVersion}, registered from {media.target}. It has the
-          drivers of {media.builtOn}: check that it starts this computer.
+          Built on {media.builtOn} {builtAt} with kopia {media.kopiaVersion}, registered from {media.target}.{" "}
+          {media.drivers
+            ? "It has " + media.drivers.length + " storage, network and USB drivers, added on " + media.builtOn
+            : "It has the drivers of " + media.builtOn}
+          : check that it starts this computer.
           {media.passwordEmbedded && " It holds the repository password: keep it safe."}
         </p>
       ) : (
@@ -623,6 +626,100 @@ function imageColumns(bytesStringBase2, showHost) {
   ];
 }
 
+/** Tells whether recovery media holds a version of a driver, by its INF name. */
+export function mediaHasDriver(mediaDrivers, driver) {
+  const inf = driver.inf.toLowerCase();
+  return mediaDrivers.some((d) => d.inf.toLowerCase() === inf);
+}
+
+/**
+ * Lists the storage, network and USB drivers that the images of each
+ * computer store, which recovery media needs to restore it, and whether this
+ * computer's recovery media has them. It shows nothing until an image stores
+ * drivers, nor when the server cannot list them.
+ */
+function DriverInventory({ mediaDrivers }) {
+  const [hosts, setHosts] = useState(null);
+
+  useEffect(() => {
+    axios
+      .get("/api/v1/images/drivers")
+      .then((result) => setHosts(result.data.hosts || []))
+      .catch(() => setHosts([]));
+  }, []);
+
+  if (!hosts || hosts.length === 0) {
+    return null;
+  }
+
+  const rows = hosts.flatMap((h) => (h.drivers || []).map((d) => ({ ...d, host: h.host, imageTime: h.imageTime })));
+  const missing = mediaDrivers ? rows.filter((d) => !mediaHasDriver(mediaDrivers, d)) : [];
+  const missingHosts = [...new Set(missing.map((d) => d.host))];
+
+  const columns = [
+    {
+      id: "host",
+      header: "Computer",
+      meta: { className: "col-source" },
+      accessorFn: (x) => x.host,
+      cell: (x) => (
+        <>
+          <span className="source-name">{x.getValue()}</span>
+          <span className="source-path" title={moment(x.row.original.imageTime).toLocaleString()}>
+            image of {moment(x.row.original.imageTime).fromNow()}
+          </span>
+        </>
+      ),
+    },
+    {
+      id: "driver",
+      header: "Driver",
+      accessorFn: (x) => x.inf,
+      cell: (x) => (
+        <>
+          <span className="source-name">{x.getValue()}</span>
+          <span className="source-path">{x.row.original.class}</span>
+        </>
+      ),
+    },
+    { id: "version", header: "Version", accessorFn: (x) => x.version },
+  ];
+
+  if (mediaDrivers) {
+    columns.push({
+      id: "media",
+      header: "Recovery Media",
+      accessorFn: (x) => mediaHasDriver(mediaDrivers, x),
+      cell: (x) =>
+        x.getValue() ? (
+          <Badge bg="success">on media</Badge>
+        ) : (
+          <Badge bg="warning" text="dark">
+            missing
+          </Badge>
+        ),
+    });
+  }
+
+  return (
+    <div data-testid="driver-inventory" className="mt-4">
+      <h5>Drivers</h5>
+      <p className="text-muted">
+        The storage, network and USB drivers stored with the newest image of each computer. One recovery media restores
+        every computer whose drivers it has: build it with{" "}
+        <code>kopia image recovery-media create --drivers-from all</code>.
+      </p>
+      {missingHosts.length > 0 && (
+        <Alert variant="warning" data-testid="driver-inventory-missing">
+          <FontAwesomeIcon icon={faExclamationTriangle} /> This computer&apos;s recovery media lacks drivers of{" "}
+          {missingHosts.join(", ")}, so it may not reach their disks or network.
+        </Alert>
+      )}
+      <KopiaTable data={rows} columns={columns} />
+    </div>
+  );
+}
+
 /**
  * Lists the disk images in the repository and, on Windows, the scheduled
  * image tasks, the last image run and the recovery media of the computer the
@@ -881,6 +978,7 @@ export function Images() {
           columns={imageColumns(bytesStringBase2, new Set(images.images.map((i) => i.source.host)).size > 1)}
         />
       )}
+      <DriverInventory mediaDrivers={status.recoveryMedia?.drivers} />
     </>
   );
 }
