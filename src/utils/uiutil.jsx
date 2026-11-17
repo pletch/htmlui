@@ -29,22 +29,45 @@ export function sizeWithFailures(size, summ, bytesStringBase2) {
   );
 }
 
-export const uploadedBytesTitle =
-  "New data the snapshot stored after deduplication, compression and encryption; unchanged files add nothing";
+export const newDataBytesTitle =
+  "New data the snapshot added after deduplication, before compression; unchanged files add nothing";
+
+export const uploadedBytesTitle = "What the new data takes in the repository after compression and encryption";
 
 /**
- * Shows the bytes a snapshot uploaded. Snapshots taken before kopia
- * recorded it have none, and show nothing.
+ * Shows a byte count with an explanation. Counts that were not recorded, as
+ * for snapshots taken before kopia recorded them, show nothing.
+ *
+ * @param {number|undefined|null} value - the byte count
+ * @param {string} title - the explanation shown as a tooltip
+ * @param {boolean} bytesStringBase2 - whether to use base-2 units
+ */
+function recordedBytesCell(value, title, bytesStringBase2) {
+  if (value === undefined || value === null || value < 0) {
+    return "";
+  }
+
+  return <span title={title}>{sizeDisplayName(value, bytesStringBase2)}</span>;
+}
+
+/**
+ * Shows the new data a snapshot added, before compression.
+ *
+ * @param {number|undefined|null} newData - the snapshot's newDataBytes
+ * @param {boolean} bytesStringBase2 - whether to use base-2 units
+ */
+export function newDataBytesCell(newData, bytesStringBase2) {
+  return recordedBytesCell(newData, newDataBytesTitle, bytesStringBase2);
+}
+
+/**
+ * Shows what a snapshot's new data takes in the repository.
  *
  * @param {number|undefined|null} uploaded - the snapshot's uploadedBytes
  * @param {boolean} bytesStringBase2 - whether to use base-2 units
  */
 export function uploadedBytesCell(uploaded, bytesStringBase2) {
-  if (uploaded === undefined || uploaded === null || uploaded < 0) {
-    return "";
-  }
-
-  return <span title={uploadedBytesTitle}>{sizeDisplayName(uploaded, bytesStringBase2)}</span>;
+  return recordedBytesCell(uploaded, uploadedBytesTitle, bytesStringBase2);
 }
 
 /**

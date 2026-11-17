@@ -119,15 +119,18 @@ describe("Snapshots component", () => {
     unmount();
   });
 
-  test("shows what the last snapshot uploaded", async () => {
+  test("shows the new data the last snapshot added and what it stored", async () => {
     const withUploaded = structuredClone(mockSourcesResponse);
+    withUploaded.sources[0].lastSnapshot.newDataBytes = 7500000;
     withUploaded.sources[0].lastSnapshot.uploadedBytes = 2500000;
     axiosMock.onGet("/api/v1/sources").reply(200, withUploaded);
 
     const { unmount } = renderSnapshots();
 
     await waitFor(() => {
-      expect(screen.getByText("Uploaded")).toBeInTheDocument();
+      expect(screen.getByText("New Data")).toBeInTheDocument();
+      expect(screen.getByText("Stored")).toBeInTheDocument();
+      expect(screen.getByText("7.5 MB")).toBeInTheDocument();
       expect(screen.getByText("2.5 MB")).toBeInTheDocument();
     });
 

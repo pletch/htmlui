@@ -1,4 +1,24 @@
-import { snapshotSizeCell, toAlgorithmOption, uploadedBytesCell, uploadedBytesTitle } from "../../src/utils/uiutil";
+import {
+  newDataBytesCell,
+  newDataBytesTitle,
+  snapshotSizeCell,
+  toAlgorithmOption,
+  uploadedBytesCell,
+  uploadedBytesTitle,
+} from "../../src/utils/uiutil";
+
+describe("newDataBytesCell", () => {
+  it("shows the new data with its explanation", () => {
+    const cell = newDataBytesCell(7500000, false);
+    expect(cell.props.children).toBe("7.5 MB");
+    expect(cell.props.title).toBe(newDataBytesTitle);
+  });
+
+  it("shows nothing for snapshots taken before kopia recorded it", () => {
+    expect(newDataBytesCell(undefined, false)).toBe("");
+    expect(newDataBytesCell(null, false)).toBe("");
+  });
+});
 
 describe("toAlgorithmOption", () => {
   it("creates basic option element", () => {
