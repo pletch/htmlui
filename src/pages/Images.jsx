@@ -602,16 +602,19 @@ export function Images() {
     );
   };
 
+  // replacing the tasks' copy of kopia keeps their connection; a KopiaUI
+  // without it installs the schedule again with the same settings
   const onUpdate = () =>
     act(
       () =>
-        window.kopiaUI
-          .installImageSchedule(settingsFromSchedule(status.schedule))
-          .then((result) =>
-            result === "canceled"
-              ? { variant: "warning", text: "The administrator prompt was declined, so the tasks were not updated." }
-              : { variant: "success", text: "The scheduled tasks now run this version of kopia." },
-          ),
+        (window.kopiaUI.updateImageSchedule
+          ? window.kopiaUI.updateImageSchedule()
+          : window.kopiaUI.installImageSchedule(settingsFromSchedule(status.schedule))
+        ).then((result) =>
+          result === "canceled"
+            ? { variant: "warning", text: "The administrator prompt was declined, so the tasks were not updated." }
+            : { variant: "success", text: "The scheduled tasks now run this version of kopia." },
+        ),
       "Unable to update the tasks",
     );
 

@@ -207,6 +207,24 @@ describe("Images page", () => {
     const st = scheduledStatus();
     st.schedule = { ...st.schedule, kopiaVersion: "v0.0.9" };
     mockLists(st);
+    window.kopiaUI = {
+      updateImageSchedule: vi.fn().mockResolvedValue("done"),
+      installImageSchedule: vi.fn(),
+    };
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("schedule-outdated")).toHaveTextContent("v0.0.9"));
+    await userEvent.click(screen.getByTestId("update-schedule"));
+
+    await waitFor(() => expect(screen.getByText(/now run this version of kopia/)).toBeInTheDocument());
+    expect(window.kopiaUI.updateImageSchedule).toHaveBeenCalledTimes(1);
+    expect(window.kopiaUI.installImageSchedule).not.toHaveBeenCalled();
+  });
+
+  test("with an older KopiaUI, updates tasks by installing them again", async () => {
+    const st = scheduledStatus();
+    st.schedule = { ...st.schedule, kopiaVersion: "v0.0.9" };
+    mockLists(st);
     window.kopiaUI = { installImageSchedule: vi.fn().mockResolvedValue("done") };
     renderImages();
 
