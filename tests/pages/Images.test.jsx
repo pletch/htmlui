@@ -210,7 +210,7 @@ describe("Images page", () => {
     expect(screen.getByTestId("edit-schedule")).toHaveTextContent("Set Up Schedule...");
     expect(screen.queryByTestId("remove-schedule")).not.toBeInTheDocument();
     expect(screen.getByText("No image run has completed yet.")).toBeInTheDocument();
-    expect(screen.getByText(/No recovery media was built/)).toBeInTheDocument();
+    expect(screen.getByText(/No recovery media was built/)).toHaveTextContent("kopia image recovery-media register");
     expect(screen.getByTestId("run-image-task")).toBeEnabled();
   });
 
@@ -428,6 +428,63 @@ describe("Images page", () => {
     await waitFor(() => expect(screen.getByTestId("last-run-failed")).toBeInTheDocument());
     expect(screen.getByText("unable to create shadow copy")).toBeInTheDocument();
     expect(screen.getByTestId("recovery-media-findings")).toHaveTextContent("disk 0 changed");
+  });
+
+  test("shows media built on another computer and registered for this one", async () => {
+    const st = scheduledStatus();
+    st.recoveryMedia = { builtAt: "2026-11-01T00:00:00Z", kopiaVersion: "v0.1", target: "E:\\", builtOn: "DESKTOP" };
+    st.lastRun = { ...st.lastRun, recoveryMedia: ["kopia is now v0.2; the media has v0.1"] };
+    mockLists(st);
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("recovery-media-shared")).toBeInTheDocument());
+    expect(screen.getByTestId("recovery-media-shared")).toHaveTextContent("Built on DESKTOP");
+    expect(screen.getByTestId("recovery-media-shared")).toHaveTextContent("registered from E:\\");
+    expect(screen.getByTestId("recovery-media-shared")).toHaveTextContent("It has the drivers of DESKTOP");
+    expect(screen.getByTestId("recovery-media-findings")).toHaveTextContent("on DESKTOP and register it");
+  });
+
+  test("lists the drivers of each computer and whether the recovery media has them", async () => {
+    const st = scheduledStatus();
+    st.recoveryMedia = {
+      builtAt: "2026-11-01T00:00:00Z",
+      kopiaVersion: "v0.1",
+      target: "E:\\",
+      builtOn: "DESKTOP",
+      drivers: [{ class: "Net", inf: "RT640x64.inf", version: "10.1" }],
+    };
+    mockLists(st);
+    axiosMock.onGet("/api/v1/images/drivers").reply(200, {
+      hosts: [
+        {
+          host: "desktop",
+          imageTime: "2026-11-16T00:00:00Z",
+          drivers: [{ class: "Net", inf: "rt640x64.inf", version: "10.65", entry: "oem40" }],
+        },
+        {
+          host: "laptop",
+          imageTime: "2026-11-15T00:00:00Z",
+          drivers: [{ class: "SCSIAdapter", inf: "iastorvd.inf", version: "19.5", entry: "oem3" }],
+        },
+      ],
+    });
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("driver-inventory")).toBeInTheDocument());
+    expect(screen.getByTestId("recovery-media-shared")).toHaveTextContent("It has 1 storage, network and USB drivers");
+    expect(screen.getByText("iastorvd.inf")).toBeInTheDocument();
+    expect(screen.getByText("on media")).toBeInTheDocument();
+    expect(screen.getByText("missing")).toBeInTheDocument();
+    expect(screen.getByTestId("driver-inventory-missing")).toHaveTextContent("lacks drivers of laptop");
+  });
+
+  test("shows no driver inventory until an image stores drivers", async () => {
+    mockLists(scheduledStatus());
+    axiosMock.onGet("/api/v1/images/drivers").reply(200, { hosts: [] });
+    renderImages();
+
+    await waitFor(() => expect(screen.getByText("Images")).toBeInTheDocument());
+    expect(screen.queryByTestId("driver-inventory")).not.toBeInTheDocument();
   });
 
   test("on other systems, lists images without a schedule", async () => {
