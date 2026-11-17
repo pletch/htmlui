@@ -42,6 +42,7 @@ const image = {
   bytesRead: 200000000000,
   chunksTotal: 100,
   zeroChunks: 10,
+  newDataBytes: 9000000000,
   uploadedBytes: 3000000000,
 };
 
@@ -65,7 +66,13 @@ function scheduledStatus(overrides = {}) {
       endTime: "2026-11-16T03:00:00Z",
       success: true,
       images: [
-        { source: "u@pc:image:disk:0f6a", snapshotId: "m1", bytesRead: 200000000000, uploadedBytes: 3000000000 },
+        {
+          source: "u@pc:image:disk:0f6a",
+          snapshotId: "m1",
+          bytesRead: 200000000000,
+          newDataBytes: 9000000000,
+          uploadedBytes: 3000000000,
+        },
       ],
     },
     recoveryMedia: { builtAt: "2026-11-01T00:00:00Z", kopiaVersion: "v0.1", target: "usb" },
@@ -138,7 +145,12 @@ describe("Images page", () => {
 
     expect(screen.getByText("Disk 0f6ab3f2-1c3d-4e5f-8a9b-0c1d2e3f4a51")).toBeInTheDocument();
     expect(screen.getByText("p3-C.img")).toBeInTheDocument();
+    expect(screen.getByText("Disk Size")).toBeInTheDocument();
+    expect(screen.getByText("New Data")).toBeInTheDocument();
+    expect(screen.getByText("Stored")).toBeInTheDocument();
+    expect(screen.getByText("9 GB")).toBeInTheDocument();
     expect(screen.getByText("3 GB")).toBeInTheDocument();
+    expect(screen.getByText(/new data 9 GB, stored 3 GB/)).toBeInTheDocument();
     expect(screen.getByText(createTask)).toBeInTheDocument();
     expect(screen.getByText("Succeeded", { selector: "td" })).toBeInTheDocument();
     expect(screen.getByText(/written to usb/)).toBeInTheDocument();
