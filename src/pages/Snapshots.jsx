@@ -17,6 +17,7 @@ import { errorAlert, redirect, newDataBytesCell, snapshotSizeCell, uploadedBytes
 import { policyEditorURL, sourceQueryStringParams } from "../utils/policyutil";
 import { CLIEquivalent } from "../components/CLIEquivalent";
 import { UIPreferencesContext } from "../contexts/UIPreferencesContext";
+import { isImageSource } from "../utils/imageutil";
 
 const localSnapshots = "Local Snapshots";
 const allSnapshots = "All Snapshots";
@@ -321,6 +322,10 @@ export class Snapshots extends Component {
     if (isLoading) {
       return <Spinner animation="border" variant="primary" />;
     }
+
+    // disk images have their own page
+    sources = sources.filter((x) => !isImageSource(x.source));
+
     let uniqueOwners = sources.reduce((a, d) => {
       const owner = formatOwnerName(d.source);
 

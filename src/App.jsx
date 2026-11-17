@@ -31,8 +31,8 @@ import { AppContext } from "./contexts/AppContext";
 import { UIPreferenceProvider } from "./contexts/UIPreferencesContext";
 
 const SIDEBAR_ITEMS = [
-  { to: "/snapshots", label: "Snapshots", testid: "tab-snapshots", icon: faCamera, needsRepository: true },
-  { to: "/images", label: "Images", testid: "tab-images", icon: faHardDrive, needsRepository: true },
+  { to: "/snapshots", label: "File Snapshots", testid: "tab-snapshots", icon: faCamera, needsRepository: true },
+  { to: "/images", label: "Disk Images", testid: "tab-images", icon: faHardDrive, needsRepository: true },
   { to: "/policies", label: "Policies", testid: "tab-policies", icon: faShieldHalved, needsRepository: true },
   { to: "/tasks", label: "Tasks", testid: "tab-tasks", icon: faListCheck, needsRepository: true },
   { to: "/repo", label: "Repository", testid: "tab-repo", icon: faDatabase, needsRepository: false },

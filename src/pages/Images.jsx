@@ -1,4 +1,15 @@
-import { faExclamationTriangle, faInfoCircle } from "@fortawesome/free-solid-svg-icons";
+import {
+  faChevronDown,
+  faChevronRight,
+  faEject,
+  faExclamationTriangle,
+  faFolderOpen,
+  faHardDrive,
+  faInfoCircle,
+  faListUl,
+  faSync,
+  faTrash,
+} from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import axios from "axios";
 import moment from "moment";
@@ -6,14 +17,15 @@ import React, { use, useCallback, useEffect, useRef, useState } from "react";
 import Alert from "react-bootstrap/Alert";
 import Badge from "react-bootstrap/Badge";
 import Button from "react-bootstrap/Button";
-import Card from "react-bootstrap/Card";
 import Col from "react-bootstrap/Col";
 import Form from "react-bootstrap/Form";
 import Modal from "react-bootstrap/Modal";
 import ProgressBar from "react-bootstrap/ProgressBar";
 import Row from "react-bootstrap/Row";
 import Spinner from "react-bootstrap/Spinner";
+import Tab from "react-bootstrap/Tab";
 import Table from "react-bootstrap/Table";
+import Tabs from "react-bootstrap/Tabs";
 import { Link } from "react-router";
 import {
   CreateImageDialog,
@@ -24,11 +36,10 @@ import {
 import KopiaTable from "../components/KopiaTable";
 import { UIPreferencesContext } from "../contexts/UIPreferencesContext";
 import { formatDuration, objectLink, sizeDisplayName } from "../utils/formatutils";
+import { diskMapTiles, diskSourcePrefix, parseVolumeEntry, partitionTypeName, usedBytes } from "../utils/imageutil";
 import { redirect } from "../utils/uiutil";
 
 const statusRefreshMillis = 5000;
-
-const diskSourcePrefix = "image:disk:";
 
 // Task Scheduler result codes that are not failures, as schtasks prints them.
 const taskResults = {
@@ -450,181 +461,304 @@ function FailedStart({ status }) {
   );
 }
 
-function ImageStatus({
-  status,
-  bytesStringBase2,
-  onRun,
-  onEdit,
-  onRemove,
-  onPause,
-  onUpdate,
-  onCreateRecoveryMedia,
-  onStop,
-  busy,
-  message,
-}) {
+/**
+ * The Schedule tab: the scheduled image tasks of the server's computer, their
+ * settings and the last image run.
+ */
+function ScheduleTab({ status, bytesStringBase2, onEdit, onRemove, onPause, onUpdate, busy }) {
   if (!status.supported) {
     return (
       <Alert variant="info">
-        <FontAwesomeIcon icon={faInfoCircle} /> Disk images are created on Windows. Images of this repository&apos;s
-        Windows computers are listed below.
+        <FontAwesomeIcon icon={faInfoCircle} /> Images are scheduled on Windows.
       </Alert>
     );
   }
 
   const createTask = status.tasks[0];
-  const taskRunning = createTask?.status === "Running";
   const scheduled = createTask?.scheduled;
 
   return (
-    <Card className="mb-3">
-      <Card.Body>
-        <Row className="mb-2">
-          <Col>
-            <h5>Disk images of this computer</h5>
-          </Col>
-          <Col xs="auto">
-            <Button
-              size="sm"
-              variant="primary"
-              data-testid="run-image-task"
-              disabled={taskRunning || busy || !!status.progress}
-              onClick={onRun}
-              title="Create images of this computer's disks now, with or without a schedule; asks for administrator rights"
-            >
-              {busy || taskRunning ? <Spinner size="sm" animation="border" /> : null} Create Image Now
-            </Button>
-            <Button size="sm" variant="secondary" data-testid="edit-schedule" disabled={busy} onClick={onEdit}>
-              {scheduled ? "Change Schedule..." : "Set Up Schedule..."}
-            </Button>
-            {scheduled && window.kopiaUI?.pauseImageSchedule && (
-              <Button
-                size="sm"
-                variant="secondary"
-                data-testid="pause-schedule"
-                disabled={busy}
-                onClick={() => onPause(!!status.schedule?.paused)}
-                title="Asks for administrator rights; an image being created goes on"
-              >
-                {status.schedule?.paused ? "Resume Schedule" : "Pause Schedule"}
-              </Button>
-            )}
-            {scheduled && window.kopiaUI?.removeImageSchedule && (
-              <Button size="sm" variant="secondary" data-testid="remove-schedule" disabled={busy} onClick={onRemove}>
-                Remove Schedule
-              </Button>
-            )}
-          </Col>
-        </Row>
-        {message && <Alert variant={message.variant}>{message.text}</Alert>}
-        <FailedStart status={status} />
-        {status.progress && (
-          <RunProgress progress={status.progress} bytesStringBase2={bytesStringBase2} busy={busy} onStop={onStop} />
-        )}
-        {!scheduled && !createTask?.error && (
-          <Alert variant="info">
-            <FontAwesomeIcon icon={faInfoCircle} /> Images are not scheduled on this computer. Create one now, or set up
-            a schedule to create them automatically.
-          </Alert>
-        )}
-        {scheduled && <ScheduleSettings status={status} busy={busy} onUpdate={onUpdate} />}
-        {status.scheduleError && <Alert variant="danger">{status.scheduleError}</Alert>}
-        <Table size="sm" responsive>
-          <thead>
-            <tr>
-              <th>Task</th>
-              <th>Status</th>
-              <th>Next Run</th>
-              <th>Last Run</th>
-              <th>Last Result</th>
-            </tr>
-          </thead>
-          <tbody>
-            {status.tasks.map((t) => (
-              <TaskRow key={t.name} task={t} />
-            ))}
-          </tbody>
-        </Table>
-        <h6>Last image run</h6>
-        <LastRun status={status} bytesStringBase2={bytesStringBase2} />
-        <RecoveryMedia status={status} busy={busy} onCreate={onCreateRecoveryMedia} />
-      </Card.Body>
-    </Card>
-  );
-}
-
-/**
- * Shows an image as its disk name, linking to the image's files, with its
- * volumes and, when images of several computers are listed, the computer under it.
- */
-function imageCell(image, diskName, showHost) {
-  const volumes = (image.volumes || []).map((v) => v.entryName).join(", ");
-  return (
     <>
-      <Link className="source-link" to={objectLink(image.rootID)} title={image.source.host + ": " + diskName}>
-        <span className="source-name">{diskName}</span>
-        {volumes && <span className="source-path">{volumes}</span>}
-        {showHost && <span className="source-owner">{image.source.host}</span>}
-      </Link>
-      {image.metadataError && (
-        <FontAwesomeIcon
-          color="red"
-          icon={faExclamationTriangle}
-          title={"Unable to read the image statistics: " + image.metadataError}
-        />
+      <div className="image-toolbar mb-3">
+        <Button size="sm" variant="secondary" data-testid="edit-schedule" disabled={busy} onClick={onEdit}>
+          {scheduled ? "Change Schedule..." : "Set Up Schedule..."}
+        </Button>
+        {scheduled && window.kopiaUI?.pauseImageSchedule && (
+          <Button
+            size="sm"
+            variant="secondary"
+            data-testid="pause-schedule"
+            disabled={busy}
+            onClick={() => onPause(!!status.schedule?.paused)}
+            title="Asks for administrator rights; an image being created goes on"
+          >
+            {status.schedule?.paused ? "Resume Schedule" : "Pause Schedule"}
+          </Button>
+        )}
+        {scheduled && window.kopiaUI?.removeImageSchedule && (
+          <Button size="sm" variant="secondary" data-testid="remove-schedule" disabled={busy} onClick={onRemove}>
+            Remove Schedule
+          </Button>
+        )}
+      </div>
+      {!scheduled && !createTask?.error && (
+        <Alert variant="info">
+          <FontAwesomeIcon icon={faInfoCircle} /> Images are not scheduled on this computer. Create one now, or set up a
+          schedule to create them automatically.
+        </Alert>
       )}
+      {scheduled && <ScheduleSettings status={status} busy={busy} onUpdate={onUpdate} />}
+      {status.scheduleError && <Alert variant="danger">{status.scheduleError}</Alert>}
+      <Table size="sm" responsive>
+        <thead>
+          <tr>
+            <th>Task</th>
+            <th>Status</th>
+            <th>Next Run</th>
+            <th>Last Run</th>
+            <th>Last Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          {status.tasks.map((t) => (
+            <TaskRow key={t.name} task={t} />
+          ))}
+        </tbody>
+      </Table>
+      <h6>Last image run</h6>
+      <LastRun status={status} bytesStringBase2={bytesStringBase2} />
     </>
   );
 }
 
-function imageColumns(bytesStringBase2, showHost) {
+/** Returns the path of a folder in a mounted snapshot, with the mount's own separator. */
+export function pathInMount(mountPath, folder) {
+  if (!folder) {
+    return mountPath;
+  }
+
+  const windows = /^[A-Za-z]:/.test(mountPath) || mountPath.includes("\\");
+  const sep = windows ? "\\" : "/";
+
+  return mountPath.replace(/[\\/]+$/, "") + sep + folder;
+}
+
+/** Names a partition tile like Macrium does: its number and its drive letter, GPT name or type. */
+function tileTitle(tile) {
+  const v = tile.volume ? parseVolumeEntry(tile.volume.entryName) : null;
+  const name = v?.letter ? "(" + v.letter + ")" : tile.name || partitionTypeName(tile.typeGuid);
+
+  return tile.number + " - " + name;
+}
+
+/** Tells what a tile's partition holds in the image. */
+function tileKind(tile) {
+  if (!tile.volume) {
+    return "Not imaged";
+  }
+
+  return tile.volume.kind === "ntfs" ? "NTFS" : "Imaged whole";
+}
+
+/**
+ * Shows the partitions of the selected image's disk as tiles, each with how
+ * full it was, like Macrium Reflect's disk map. NTFS volumes can be browsed:
+ * the image is mounted and the volume's folder opened.
+ */
+function DiskMap({ image, showHost, bytesStringBase2, busy, onBrowse }) {
+  const tiles = diskMapTiles(image);
+  const size = (v) => sizeDisplayName(v, bytesStringBase2);
+
+  return (
+    <div className="disk-map mb-3" data-testid="disk-map">
+      <div className="disk-map-header">
+        <FontAwesomeIcon icon={faHardDrive} /> <strong>{diskDisplayName(image.source)}</strong>
+        {showHost && <span className="text-muted"> on {image.source.host}</span>}
+        {image.diskSize > 0 && <span className="text-muted"> &lt;{size(image.diskSize)}&gt;</span>}
+        <span className="text-muted">
+          {" "}
+          — image of{" "}
+          <span title={moment(image.startTime).toLocaleString()}>{moment(image.startTime).format("LLL")}</span>
+        </span>
+      </div>
+      <div className="disk-map-tiles">
+        {tiles.map((t) => {
+          const v = t.volume;
+          const used = usedBytes(v);
+          const total = v ? v.size : t.length;
+          const percent = total > 0 ? Math.min(100, (used / total) * 100) : 0;
+          const browsable = v?.kind === "ntfs";
+
+          return (
+            <div
+              key={t.number}
+              className={"disk-tile" + (v ? "" : " disk-tile-skipped")}
+              style={{ flexGrow: Math.max(1, Math.log2(total / (1 << 20) + 1)) }}
+              data-testid={"disk-tile-" + t.number}
+            >
+              <div className="disk-tile-title" title={t.name}>
+                {tileTitle(t)}
+              </div>
+              <div className="disk-tile-kind">
+                {t.typeGuid ? partitionTypeName(t.typeGuid) + " · " : ""}
+                {tileKind(t)}
+              </div>
+              <div className={"disk-usage" + (v?.kind === "raw" ? " disk-usage-whole" : "")}>
+                {v && <div className="disk-usage-used" style={{ width: percent + "%" }} />}
+              </div>
+              <div className="disk-tile-sizes">
+                {v && v.kind === "ntfs" ? (
+                  <>
+                    <span>{size(used)}</span>
+                    <span>{size(total)}</span>
+                  </>
+                ) : (
+                  <span>{size(total)}</span>
+                )}
+              </div>
+              {browsable && (
+                <Button
+                  size="sm"
+                  variant="link"
+                  className="disk-tile-browse"
+                  disabled={busy}
+                  data-testid={"browse-volume-" + t.number}
+                  onClick={() => onBrowse(image, parseVolumeEntry(v.entryName).folder)}
+                  title="Mount the image and open this volume's files"
+                >
+                  <FontAwesomeIcon icon={faFolderOpen} /> Browse
+                </Button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Groups images by disk (their source), keeping the API's order: newest first within a disk. */
+export function groupImagesByDisk(images) {
+  const groups = [];
+  const byKey = new Map();
+
+  for (const img of images) {
+    const key = img.source.host + "@" + img.source.userName + ":" + img.source.path;
+    let g = byKey.get(key);
+
+    if (!g) {
+      g = { key, source: img.source, images: [] };
+      byKey.set(key, g);
+      groups.push(g);
+    }
+
+    g.images.push(img);
+  }
+
+  return groups;
+}
+
+/**
+ * Lists the images grouped by disk, like Macrium Reflect's backup sets. Every
+ * kopia image is a complete restore point, so a group is the images of one
+ * disk, newest first, and New Data shows what each added.
+ */
+function ImageList({ groups, selectedId, onSelect, mounts, showHost, bytesStringBase2 }) {
+  const [collapsed, setCollapsed] = useState({});
   const size = (v) => (v === undefined ? "" : sizeDisplayName(v, bytesStringBase2));
 
-  const num = { className: "col-num" };
+  return (
+    <Table size="sm" hover responsive className="image-list" data-testid="image-list">
+      <thead>
+        <tr>
+          <th>Image</th>
+          <th className="col-time">Started</th>
+          <th className="col-num">Disk Size</th>
+          <th className="col-num">Read</th>
+          <th className="col-num">New Data</th>
+          <th className="col-num">Stored</th>
+        </tr>
+      </thead>
+      <tbody>
+        {groups.map((g) => (
+          <React.Fragment key={g.key}>
+            <tr
+              className="image-group"
+              onClick={() => setCollapsed({ ...collapsed, [g.key]: !collapsed[g.key] })}
+              data-testid="image-group"
+            >
+              <td colSpan={6}>
+                <FontAwesomeIcon icon={collapsed[g.key] ? faChevronRight : faChevronDown} fixedWidth />{" "}
+                <FontAwesomeIcon icon={faHardDrive} />{" "}
+                <span className="image-group-name">{diskDisplayName(g.source)}</span>
+                {showHost && <span className="image-group-host"> on {g.source.host}</span>}
+                <span className="text-muted small">
+                  {" "}
+                  ({g.images.length} {g.images.length === 1 ? "image" : "images"})
+                </span>
+              </td>
+            </tr>
+            {!collapsed[g.key] &&
+              g.images.map((img, i) => {
+                const volumes = (img.volumes || []).map((v) => v.entryName).join(", ");
+                const mounted = mounts[img.rootID];
 
-  return [
-    {
-      id: "startTime",
-      header: "Started",
-      meta: { className: "col-time" },
-      accessorFn: (x) => x.startTime,
-      cell: (x) => (
-        <>
-          <span className="time-last" title={moment(x.getValue()).toLocaleString()}>
-            {moment(x.getValue()).fromNow()}
-          </span>
-          {x.row.original.endTime && (
-            <span className="time-next">
-              took {formatDuration(x.row.original.startTime, x.row.original.endTime, true)}
-            </span>
-          )}
-        </>
-      ),
-    },
-    {
-      id: "disk",
-      header: "Image",
-      meta: { className: "col-source" },
-      accessorFn: (x) => diskDisplayName(x.source),
-      cell: (x) => imageCell(x.row.original, x.getValue(), showHost),
-    },
-    { id: "size", header: "Disk Size", meta: num, accessorFn: (x) => x.size, cell: (x) => size(x.getValue()) },
-    { id: "read", header: "Read", meta: num, accessorFn: (x) => x.bytesRead, cell: (x) => size(x.getValue()) },
-    {
-      id: "newData",
-      header: "New Data",
-      meta: num,
-      accessorFn: (x) => x.newDataBytes,
-      cell: (x) => size(x.getValue()),
-    },
-    {
-      id: "uploaded",
-      header: "Stored",
-      meta: num,
-      accessorFn: (x) => x.uploadedBytes,
-      cell: (x) => size(x.getValue()),
-    },
-  ];
+                return (
+                  <tr
+                    key={img.id}
+                    className={"image-row" + (img.id === selectedId ? " table-active" : "")}
+                    onClick={() => onSelect(img.id)}
+                    data-testid={"image-row-" + img.id}
+                  >
+                    <td className="col-source image-name">
+                      <span className="source-name">
+                        {moment(img.startTime).format("L LT")}
+                        {i === 0 && (
+                          <Badge bg="secondary" className="ms-2">
+                            latest
+                          </Badge>
+                        )}
+                        {mounted && (
+                          <Badge bg="info" className="ms-2" title={"Mounted at " + mounted} data-testid="image-mounted">
+                            mounted {mounted}
+                          </Badge>
+                        )}
+                        {(img.pins || []).length > 0 && (
+                          <Badge bg="warning" text="dark" className="ms-2" title={img.pins.join(", ")}>
+                            pinned
+                          </Badge>
+                        )}
+                        {img.metadataError && (
+                          <FontAwesomeIcon
+                            className="ms-2"
+                            color="red"
+                            icon={faExclamationTriangle}
+                            title={"Unable to read the image statistics: " + img.metadataError}
+                          />
+                        )}
+                      </span>
+                      {volumes && <span className="source-path">{volumes}</span>}
+                    </td>
+                    <td className="col-time">
+                      <span className="time-last" title={moment(img.startTime).toLocaleString()}>
+                        {moment(img.startTime).fromNow()}
+                      </span>
+                      {img.endTime && (
+                        <span className="time-next">took {formatDuration(img.startTime, img.endTime, true)}</span>
+                      )}
+                    </td>
+                    <td className="col-num">{size(img.size)}</td>
+                    <td className="col-num">{size(img.bytesRead)}</td>
+                    <td className="col-num">{size(img.newDataBytes)}</td>
+                    <td className="col-num">{size(img.uploadedBytes)}</td>
+                  </tr>
+                );
+              })}
+          </React.Fragment>
+        ))}
+      </tbody>
+    </Table>
+  );
 }
 
 /** Tells whether recovery media holds a version of a driver, by its INF name. */
@@ -649,8 +783,17 @@ function DriverInventory({ mediaDrivers }) {
       .catch(() => setHosts([]));
   }, []);
 
-  if (!hosts || hosts.length === 0) {
+  if (!hosts) {
     return null;
+  }
+
+  if (hosts.length === 0) {
+    return (
+      <p className="text-muted" data-testid="driver-inventory-empty">
+        No image stores drivers yet: computers store their storage, network and USB drivers with every image they create
+        with this version of kopia.
+      </p>
+    );
   }
 
   const rows = hosts.flatMap((h) => (h.drivers || []).map((d) => ({ ...d, host: h.host, imageTime: h.imageTime })));
@@ -703,8 +846,7 @@ function DriverInventory({ mediaDrivers }) {
   }
 
   return (
-    <div data-testid="driver-inventory" className="mt-4">
-      <h5>Drivers</h5>
+    <div data-testid="driver-inventory">
       <p className="text-muted">
         The storage, network and USB drivers stored with the newest image of each computer. One recovery media restores
         every computer whose drivers it has: build it with{" "}
@@ -851,7 +993,22 @@ export function Images() {
   const [editing, setEditing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [creatingMedia, setCreatingMedia] = useState(false);
+  const [selectedId, setSelectedId] = useState(null);
+  const [diskFilter, setDiskFilter] = useState("");
+  const [mounts, setMounts] = useState({});
   const lastRunEndRef = useRef(undefined);
+
+  // mounted snapshots by root object, to tell which images are mounted
+  const fetchMounts = useCallback(() => {
+    axios
+      .get("/api/v1/mounts")
+      .then((result) => setMounts(Object.fromEntries((result.data.items || []).map((m) => [m.root, m.path]))))
+      .catch(() => setMounts({}));
+  }, []);
+
+  useEffect(() => {
+    fetchMounts();
+  }, [fetchMounts]);
 
   const fetchImages = useCallback(() => {
     axios
@@ -1043,6 +1200,84 @@ export function Images() {
     fetchStatus();
   };
 
+  // mounts the image (once) and opens it, or one of its volume folders, in
+  // the file manager; in a browser it tells where it is mounted
+  const onBrowse = (img, folder) => {
+    setRunning(true);
+    setMessage(null);
+
+    axios
+      .post("/api/v1/mounts", { root: img.rootID })
+      .then((result) => {
+        const path = pathInMount(result.data.path, folder);
+        fetchMounts();
+
+        if (window.kopiaUI?.browseDirectory) {
+          window.kopiaUI.browseDirectory(path);
+          setMessage({ variant: "info", text: "The image is mounted at " + result.data.path + "." });
+        } else {
+          setMessage({ variant: "info", text: "The image is mounted: its files are in " + path + "." });
+        }
+      })
+      .catch((e) => setMessage({ variant: "danger", text: "Unable to mount the image: " + errorText(e) }))
+      .finally(() => setRunning(false));
+  };
+
+  const onUnmount = (img) => {
+    setRunning(true);
+    setMessage(null);
+
+    axios
+      .delete("/api/v1/mounts/" + img.rootID)
+      .then(() => setMessage({ variant: "info", text: "The image is unmounted." }))
+      .catch((e) => setMessage({ variant: "danger", text: "Unable to unmount the image: " + errorText(e) }))
+      .finally(() => {
+        setRunning(false);
+        fetchMounts();
+      });
+  };
+
+  const onDelete = (img) => {
+    if (
+      !window.confirm(
+        "Delete the image of " +
+          moment(img.startTime).format("LLL") +
+          "? The data that other images share stays until they are deleted too.",
+      )
+    ) {
+      return;
+    }
+
+    setRunning(true);
+    setMessage(null);
+
+    const unmounted = mounts[img.rootID] ? axios.delete("/api/v1/mounts/" + img.rootID) : Promise.resolve();
+
+    unmounted
+      .then(() =>
+        axios.post("/api/v1/snapshots/delete", {
+          source: img.source,
+          snapshotManifestIds: [img.id],
+        }),
+      )
+      .then(() => {
+        setMessage({ variant: "success", text: "The image is deleted." });
+        setSelectedId(null);
+        fetchImages();
+      })
+      .catch((e) => setMessage({ variant: "danger", text: "Unable to delete the image: " + errorText(e) }))
+      .finally(() => {
+        setRunning(false);
+        fetchMounts();
+      });
+  };
+
+  const onRefresh = () => {
+    fetchImages();
+    fetchStatus();
+    fetchMounts();
+  };
+
   if (error) {
     return <Alert variant="danger">{errorText(error)}</Alert>;
   }
@@ -1051,21 +1286,167 @@ export function Images() {
     return <p>Loading ...</p>;
   }
 
+  const disks = groupImagesByDisk(images.images);
+  const groups = diskFilter ? disks.filter((g) => g.key === diskFilter) : disks;
+  const visible = groups.flatMap((g) => g.images);
+  const selected = visible.find((i) => i.id === selectedId) || visible[0] || null;
+  const showHost = new Set(images.images.map((i) => i.source.host)).size > 1;
+  const createTask = status.tasks[0];
+  const taskRunning = createTask?.status === "Running";
+
   return (
     <>
-      <ImageStatus
-        status={status}
-        bytesStringBase2={bytesStringBase2}
-        onRun={onRun}
-        onEdit={() => setEditing(true)}
-        onRemove={onRemove}
-        onPause={onPause}
-        onUpdate={onUpdate}
-        onCreateRecoveryMedia={onCreateRecoveryMedia}
-        onStop={onStop}
-        busy={running}
-        message={message}
-      />
+      <Row className="mb-2 align-items-center">
+        <Col>
+          <h4 className="mb-0">Disk Images</h4>
+        </Col>
+        {status.supported && (
+          <Col xs="auto">
+            <Button
+              size="sm"
+              variant="primary"
+              data-testid="run-image-task"
+              disabled={taskRunning || running || !!status.progress}
+              onClick={onRun}
+              title="Create images of this computer's disks now, with or without a schedule; asks for administrator rights"
+            >
+              {running || taskRunning ? <Spinner size="sm" animation="border" /> : null} Create Image Now
+            </Button>
+          </Col>
+        )}
+      </Row>
+      {!status.supported && (
+        <Alert variant="info">
+          <FontAwesomeIcon icon={faInfoCircle} /> Disk images are created on Windows. Images of this repository&apos;s
+          Windows computers are listed below.
+        </Alert>
+      )}
+      {message && <Alert variant={message.variant}>{message.text}</Alert>}
+      {status.supported && <FailedStart status={status} />}
+      {status.progress && (
+        <RunProgress progress={status.progress} bytesStringBase2={bytesStringBase2} busy={running} onStop={onStop} />
+      )}
+      <Tabs defaultActiveKey="images" className="mb-3 image-tabs" data-testid="image-tabs">
+        <Tab eventKey="images" title="Images">
+          {selected && (
+            <DiskMap
+              image={selected}
+              showHost={showHost}
+              bytesStringBase2={bytesStringBase2}
+              busy={running}
+              onBrowse={onBrowse}
+            />
+          )}
+          <div className="image-filters mb-2">
+            <Form.Check
+              type="switch"
+              id="images-all-hosts"
+              label="All computers"
+              checked={allHosts}
+              onChange={(e) => {
+                setAllHosts(e.target.checked);
+                setDiskFilter("");
+              }}
+            />
+            <Form.Select
+              size="sm"
+              className="image-disk-filter"
+              value={diskFilter}
+              onChange={(e) => setDiskFilter(e.target.value)}
+              data-testid="image-disk-filter"
+              aria-label="Disk"
+            >
+              <option value="">All disks</option>
+              {disks.map((g) => (
+                <option key={g.key} value={g.key}>
+                  {diskDisplayName(g.source)}
+                  {showHost ? " on " + g.source.host : ""}
+                </option>
+              ))}
+            </Form.Select>
+          </div>
+          <div className="image-toolbar mb-2" data-testid="image-toolbar">
+            <Button size="sm" variant="secondary" onClick={onRefresh} disabled={running} title="Refresh">
+              <FontAwesomeIcon icon={faSync} /> Refresh
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={!selected || running}
+              onClick={() => onBrowse(selected)}
+              data-testid="browse-image"
+              title="Mount the image and open it: each NTFS volume is a folder"
+            >
+              <FontAwesomeIcon icon={faFolderOpen} /> Browse
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={!selected || running || !mounts[selected.rootID]}
+              onClick={() => onUnmount(selected)}
+              data-testid="unmount-image"
+            >
+              <FontAwesomeIcon icon={faEject} /> Unmount
+            </Button>
+            {selected && (
+              <Link
+                className="btn btn-sm btn-secondary"
+                to={objectLink(selected.rootID)}
+                data-testid="image-files"
+                title="Show the files the image consists of: its volume images, partition table and drivers"
+              >
+                <FontAwesomeIcon icon={faListUl} /> Contents
+              </Link>
+            )}
+            <Button
+              size="sm"
+              variant="danger"
+              disabled={!selected || running}
+              onClick={() => onDelete(selected)}
+              data-testid="delete-image"
+            >
+              <FontAwesomeIcon icon={faTrash} /> Delete
+            </Button>
+          </div>
+          {images.images.length === 0 ? (
+            <Alert variant="info">
+              <FontAwesomeIcon icon={faInfoCircle} /> No disk images{allHosts ? "" : " of " + images.localHost} yet.
+            </Alert>
+          ) : (
+            <ImageList
+              groups={groups}
+              selectedId={selected?.id}
+              onSelect={setSelectedId}
+              mounts={mounts}
+              showHost={showHost}
+              bytesStringBase2={bytesStringBase2}
+            />
+          )}
+        </Tab>
+        <Tab eventKey="schedule" title="Schedule">
+          <ScheduleTab
+            status={status}
+            bytesStringBase2={bytesStringBase2}
+            onEdit={() => setEditing(true)}
+            onRemove={onRemove}
+            onPause={onPause}
+            onUpdate={onUpdate}
+            busy={running}
+          />
+        </Tab>
+        <Tab eventKey="media" title="Recovery Media">
+          {status.supported ? (
+            <RecoveryMedia status={status} busy={running} onCreate={onCreateRecoveryMedia} />
+          ) : (
+            <Alert variant="info">
+              <FontAwesomeIcon icon={faInfoCircle} /> Recovery media is built on Windows.
+            </Alert>
+          )}
+        </Tab>
+        <Tab eventKey="drivers" title="Drivers">
+          <DriverInventory mediaDrivers={status.recoveryMedia?.drivers} />
+        </Tab>
+      </Tabs>
       {editing && (
         <ImageScheduleForm
           show={editing}
@@ -1090,31 +1471,6 @@ export function Images() {
           onStart={startImage}
         />
       )}
-      <Row className="mb-2">
-        <Col>
-          <h5>Images</h5>
-        </Col>
-        <Col xs="auto">
-          <Form.Check
-            type="switch"
-            id="images-all-hosts"
-            label="All computers"
-            checked={allHosts}
-            onChange={(e) => setAllHosts(e.target.checked)}
-          />
-        </Col>
-      </Row>
-      {images.images.length === 0 ? (
-        <Alert variant="info">
-          <FontAwesomeIcon icon={faInfoCircle} /> No disk images{allHosts ? "" : " of " + images.localHost} yet.
-        </Alert>
-      ) : (
-        <KopiaTable
-          data={images.images}
-          columns={imageColumns(bytesStringBase2, new Set(images.images.map((i) => i.source.host)).size > 1)}
-        />
-      )}
-      <DriverInventory mediaDrivers={status.recoveryMedia?.drivers} />
     </>
   );
 }

@@ -151,6 +151,24 @@ describe("Snapshots component", () => {
     unmount();
   });
 
+  test("leaves disk images to their own page", async () => {
+    const imageSource = {
+      source: { path: "image:disk:0f6ab3f2-1c3d-4e5f-8a9b-0c1d2e3f4a51", host: "testhost", userName: "testuser" },
+      status: "IDLE",
+      lastSnapshot: { startTime: "2023-01-01T10:00:00Z", stats: { totalSize: 1 }, rootEntry: { summ: {} } },
+    };
+    axiosMock
+      .onGet("/api/v1/sources")
+      .reply(200, { ...mockSourcesResponse, sources: [...mockSourcesResponse.sources, imageSource] });
+
+    const { unmount } = renderSnapshots();
+
+    await waitFor(() => expect(screen.getByText("/home/user/documents")).toBeInTheDocument());
+    expect(screen.queryByText(/image:disk:/)).not.toBeInTheDocument();
+
+    unmount();
+  });
+
   test("displays snapshot status correctly for IDLE source", async () => {
     axiosMock.onGet("/api/v1/sources").reply(200, mockSourcesResponse);
 
