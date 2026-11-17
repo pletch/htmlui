@@ -29,6 +29,7 @@ import { SnapshotHistory } from "./pages/SnapshotHistory";
 import { SnapshotRestore } from "./pages/SnapshotRestore";
 import { AppContext } from "./contexts/AppContext";
 import { UIPreferenceProvider } from "./contexts/UIPreferencesContext";
+import { RepositorySelector } from "./components/RepositorySelector";
 
 const SIDEBAR_ITEMS = [
   { to: "/snapshots", label: "File Snapshots", testid: "tab-snapshots", icon: faCamera, needsRepository: true },
@@ -139,6 +140,7 @@ export default class App extends Component {
                 <NavLink to="/" className="app-sidebar-brand" title="KopiaUI">
                   <img src="/kopia-flat.svg" className="App-logo" alt="logo" />
                 </NavLink>
+                <RepositorySelector />
                 <div className="app-sidebar-nav">
                   {SIDEBAR_ITEMS.map((item) => {
                     const enabled = isRepositoryConnected || !item.needsRepository;

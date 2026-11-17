@@ -722,3 +722,7 @@ html.linear #kopia .image-list .image-row.table-active > td {
 html.linear #kopia .image-list .image-row.table-active > td:first-child {
   box-shadow: inset 3px 0 0 var(--linear-accent);
 }
+
+html.linear #kopia .app-repo-selector .app-repo-selector-toggle {
+  border-color: var(--linear-border-strong);
+}
