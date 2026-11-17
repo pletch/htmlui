@@ -9,7 +9,24 @@ import {
   formatOwnerName,
   compare,
   formatDuration,
+  baseName,
 } from "../../src/utils/formatutils";
+
+describe("baseName", () => {
+  it.each([
+    ["/home/user/documents", "documents"],
+    ["/home/user/documents/", "documents"],
+    ["C:\\Users\\Tim\\Pictures", "Pictures"],
+    ["C:\\Users\\Tim\\Pictures\\", "Pictures"],
+    ["\\\\server\\share\\dir", "dir"],
+    ["/", ""],
+    ["C:\\", ""],
+    ["C:", ""],
+    ["", ""],
+  ])("baseName(%j) is %j", (path, want) => {
+    expect(baseName(path)).toBe(want);
+  });
+});
 
 describe("formatMilliseconds", () => {
   it("uses 'XXs' format by default", () => {

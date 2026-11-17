@@ -577,3 +577,91 @@ div.tab-body {
 .cursor-pointer {
   cursor: pointer;
 }
+
+/* Table columns (KopiaTable column meta.className). */
+#kopia .table td {
+  vertical-align: middle;
+}
+
+#kopia .table .col-num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+#kopia .table .col-time {
+  white-space: nowrap;
+}
+
+#kopia .table .col-time .time-last,
+#kopia .table .col-time .time-next {
+  display: block;
+}
+
+#kopia .table .col-time .time-next,
+#kopia .table .col-time .time-none {
+  font-size: 85%;
+  color: var(--color-text-form-help);
+}
+
+#kopia .table .col-time .time-next .badge {
+  margin-block-start: 0;
+}
+
+#kopia .table .col-actions {
+  text-align: right;
+  white-space: nowrap;
+  width: 1%;
+}
+
+#kopia .table .col-source {
+  min-width: 12em;
+}
+
+/* A source: folder name, full path and owner on separate lines. */
+#kopia .source-link {
+  display: block;
+  text-decoration: none;
+}
+
+#kopia .source-link .source-name {
+  display: block;
+  font-weight: 600;
+  color: var(--color-text-body);
+}
+
+#kopia .source-link .source-path,
+#kopia .source-link .source-owner {
+  display: block;
+  font-size: 85%;
+  overflow-wrap: anywhere;
+}
+
+#kopia .source-link .source-owner {
+  color: var(--color-text-form-help);
+}
+
+#kopia .source-link:hover .source-name {
+  text-decoration: underline;
+}
+
+.row-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+#kopia .row-actions .btn {
+  margin-right: 0;
+}
+
+.upload-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.upload-progress-bar {
+  width: 80px;
+  height: 6px;
+}

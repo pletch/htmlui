@@ -641,3 +641,38 @@ html.linear ::-webkit-scrollbar-thumb {
 html.linear ::-webkit-scrollbar-thumb:hover {
   background-color: rgba(255, 255, 255, 0.18);
 }
+
+/* Snapshots table. */
+
+html.linear #kopia .table > tbody > tr > td {
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+}
+
+html.linear #kopia .source-link .source-name {
+  color: var(--linear-text);
+  font-weight: 500;
+}
+
+html.linear #kopia .source-link .source-path {
+  color: var(--linear-muted);
+}
+
+html.linear #kopia .source-link:hover {
+  text-decoration: none;
+}
+
+html.linear #kopia .source-link:hover .source-path {
+  color: var(--linear-link);
+}
+
+html.linear #kopia .table .col-time .time-next,
+html.linear #kopia .table .col-time .time-none {
+  color: var(--linear-muted);
+}
+
+html.linear #kopia .upload-progress-bar {
+  --bs-progress-bg: var(--linear-hover);
+  --bs-progress-bar-bg: var(--linear-accent);
+  --bs-progress-border-radius: 999px;
+}

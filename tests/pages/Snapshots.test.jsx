@@ -294,6 +294,64 @@ describe("Snapshots component", () => {
     unmount();
   });
 
+  test("shows the owner under the path only when several owners are listed", async () => {
+    const multiUserResponse = {
+      ...mockSourcesResponse,
+      multiUser: true,
+      sources: [
+        mockSourcesResponse.sources[0],
+        {
+          source: { path: "/home/otheruser/data", host: "otherhost", userName: "otheruser" },
+          status: "IDLE",
+          lastSnapshot: null,
+          nextSnapshotTime: null,
+        },
+      ],
+    };
+    axiosMock.onGet("/api/v1/sources").reply(200, multiUserResponse);
+
+    const { unmount } = renderSnapshots();
+
+    await waitFor(() => {
+      expect(screen.getByText("/home/user/documents")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("testuser@testhost")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByText("Local Snapshots"));
+    await userEvent.click(screen.getByText("All Snapshots"));
+
+    expect(screen.getByText("testuser@testhost", { selector: ".source-owner" })).toBeInTheDocument();
+    expect(screen.getByText("otheruser@otherhost", { selector: ".source-owner" })).toBeInTheDocument();
+
+    unmount();
+  });
+
+  test("shows the folder name above the full path", async () => {
+    axiosMock.onGet("/api/v1/sources").reply(200, mockSourcesResponse);
+
+    const { unmount } = renderSnapshots();
+
+    await waitFor(() => {
+      expect(screen.getByText("documents", { selector: ".source-name" })).toBeInTheDocument();
+    });
+    expect(screen.getByText("/home/user/documents", { selector: ".source-path" })).toBeInTheDocument();
+
+    unmount();
+  });
+
+  test("shows a progress bar for an upload with an estimate", async () => {
+    axiosMock.onGet("/api/v1/sources").reply(200, mockSourcesResponse);
+
+    const { unmount } = renderSnapshots();
+
+    // (512000 + 204800) / 1024000 = 70%
+    await waitFor(() => {
+      expect(screen.getByTestId("snapshot-progress")).toHaveAttribute("title", "70%");
+    });
+
+    unmount();
+  });
+
   test("shows overdue badge for past due snapshots", async () => {
     const overdueResponse = {
       ...mockSourcesResponse,
@@ -316,7 +374,7 @@ describe("Snapshots component", () => {
     const { unmount } = renderSnapshots();
 
     await waitFor(() => {
-      expect(screen.getByText("overdue")).toBeInTheDocument();
+      expect(screen.getByText("overdue", { selector: ".badge" })).toBeInTheDocument();
     });
 
     unmount();
@@ -439,7 +497,7 @@ describe("Snapshots component", () => {
     const { unmount } = renderSnapshots();
 
     await waitFor(() => {
-      expect(screen.getByText("paused")).toBeInTheDocument();
+      expect(screen.getByText("paused", { selector: ".badge" })).toBeInTheDocument();
     });
 
     unmount();

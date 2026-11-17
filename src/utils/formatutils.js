@@ -224,3 +224,13 @@ export function formatDuration(from, to, useMultipleUnits = false) {
 
   return formatMilliseconds(ms, useMultipleUnits);
 }
+
+/**
+ * Returns the last name in a path, or "" for a root such as "/" or "C:\".
+ * @param {string} path - a POSIX or Windows path
+ */
+export function baseName(path) {
+  const trimmed = (path || "").replace(/[\\/]+$/, "");
+  const name = trimmed.substring(Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\")) + 1);
+  return name.endsWith(":") ? "" : name;
+}
