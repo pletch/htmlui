@@ -147,7 +147,8 @@ function LastRun({ status, bytesStringBase2 }) {
         <ul>
           {run.images.map((img) => (
             <li key={img.snapshotId}>
-              {img.source}: read {sizeDisplayName(img.bytesRead, bytesStringBase2)}, uploaded{" "}
+              {img.source}: read {sizeDisplayName(img.bytesRead, bytesStringBase2)}, new data{" "}
+              {img.newDataBytes === undefined ? "?" : sizeDisplayName(img.newDataBytes, bytesStringBase2)}, stored{" "}
               {img.uploadedBytes === undefined ? "?" : sizeDisplayName(img.uploadedBytes, bytesStringBase2)}
             </li>
           ))}
@@ -532,11 +533,17 @@ function imageColumns(bytesStringBase2, showHost) {
       header: "Duration",
       accessorFn: (x) => formatDuration(x.startTime, x.endTime, true),
     },
-    { id: "size", header: "Size", accessorFn: (x) => x.size, cell: (x) => size(x.getValue()) },
+    { id: "size", header: "Disk Size", accessorFn: (x) => x.size, cell: (x) => size(x.getValue()) },
     { id: "read", header: "Read", accessorFn: (x) => x.bytesRead, cell: (x) => size(x.getValue()) },
     {
+      id: "newData",
+      header: "New Data",
+      accessorFn: (x) => x.newDataBytes,
+      cell: (x) => size(x.getValue()),
+    },
+    {
       id: "uploaded",
-      header: "Uploaded",
+      header: "Stored",
       accessorFn: (x) => x.uploadedBytes,
       cell: (x) => size(x.getValue()),
     },
