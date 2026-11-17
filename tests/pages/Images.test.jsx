@@ -210,7 +210,7 @@ describe("Images page", () => {
     expect(screen.getByTestId("edit-schedule")).toHaveTextContent("Set Up Schedule...");
     expect(screen.queryByTestId("remove-schedule")).not.toBeInTheDocument();
     expect(screen.getByText("No image run has completed yet.")).toBeInTheDocument();
-    expect(screen.getByText(/No recovery media was built/)).toBeInTheDocument();
+    expect(screen.getByText(/No recovery media was built/)).toHaveTextContent("kopia image recovery-media register");
     expect(screen.getByTestId("run-image-task")).toBeEnabled();
   });
 
@@ -428,6 +428,20 @@ describe("Images page", () => {
     await waitFor(() => expect(screen.getByTestId("last-run-failed")).toBeInTheDocument());
     expect(screen.getByText("unable to create shadow copy")).toBeInTheDocument();
     expect(screen.getByTestId("recovery-media-findings")).toHaveTextContent("disk 0 changed");
+  });
+
+  test("shows media built on another computer and registered for this one", async () => {
+    const st = scheduledStatus();
+    st.recoveryMedia = { builtAt: "2026-11-01T00:00:00Z", kopiaVersion: "v0.1", target: "E:\\", builtOn: "DESKTOP" };
+    st.lastRun = { ...st.lastRun, recoveryMedia: ["kopia is now v0.2; the media has v0.1"] };
+    mockLists(st);
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("recovery-media-shared")).toBeInTheDocument());
+    expect(screen.getByTestId("recovery-media-shared")).toHaveTextContent("Built on DESKTOP");
+    expect(screen.getByTestId("recovery-media-shared")).toHaveTextContent("registered from E:\\");
+    expect(screen.getByTestId("recovery-media-shared")).toHaveTextContent("It has the drivers of DESKTOP");
+    expect(screen.getByTestId("recovery-media-findings")).toHaveTextContent("on DESKTOP and register it");
   });
 
   test("on other systems, lists images without a schedule", async () => {

@@ -263,24 +263,35 @@ function RecoveryMedia({ status, busy, onCreate }) {
         {heading}
         <Alert variant="warning">
           <FontAwesomeIcon icon={faExclamationTriangle} /> No recovery media was built on this computer. Without it, the
-          system disk can only be restored from a Linux live system.
+          system disk can only be restored from a Linux live system. Media built on another computer can restore this
+          one too: register it with <code>kopia image recovery-media register E:\</code> in an administrator command
+          prompt.
         </Alert>
       </>
     );
   }
 
+  const builtAt = <span title={moment(media.builtAt).toLocaleString()}>{moment(media.builtAt).fromNow()}</span>;
+
   return (
     <>
       {heading}
-      <p>
-        Built <span title={moment(media.builtAt).toLocaleString()}>{moment(media.builtAt).fromNow()}</span> with kopia{" "}
-        {media.kopiaVersion}, written to {media.target}.
-        {media.passwordEmbedded && " It holds the repository password: keep it safe."}
-      </p>
+      {media.builtOn ? (
+        <p data-testid="recovery-media-shared">
+          Built on {media.builtOn} {builtAt} with kopia {media.kopiaVersion}, registered from {media.target}. It has the
+          drivers of {media.builtOn}: check that it starts this computer.
+          {media.passwordEmbedded && " It holds the repository password: keep it safe."}
+        </p>
+      ) : (
+        <p>
+          Built {builtAt} with kopia {media.kopiaVersion}, written to {media.target}.
+          {media.passwordEmbedded && " It holds the repository password: keep it safe."}
+        </p>
+      )}
       {findings.length > 0 && (
         <Alert variant="warning" data-testid="recovery-media-findings">
-          <FontAwesomeIcon icon={faExclamationTriangle} /> The recovery media no longer matches this computer; build new
-          media.
+          <FontAwesomeIcon icon={faExclamationTriangle} /> The recovery media no longer matches this computer;{" "}
+          {media.builtOn ? "build new media, here or on " + media.builtOn + " and register it" : "build new media"}.
           <ul className="mb-0 mt-2">
             {findings.map((f) => (
               <li key={f}>{f}</li>
