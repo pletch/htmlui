@@ -42,9 +42,9 @@ describe("Select the light theme", () => {
  *
  */
 describe("Test number of themes", () => {
-  test("Should have four themes", () => {
+  test("Should have five themes", () => {
     let theme = screen.getByRole("combobox", { name: "Select theme" });
-    expect(theme).toHaveLength(4);
+    expect(theme).toHaveLength(5);
   });
 });
 

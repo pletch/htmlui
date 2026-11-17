@@ -1,0 +1,678 @@
+/*
+ * Linear-inspired dark theme.
+ *
+ * Applies when <html> has the "linear" class (see UIPreferencesContext, which also sets
+ * data-bs-theme="dark" so Bootstrap draws its own components dark). Rules start with
+ * "html.linear #kopia" so they win over the "#kopia" rules in App.css.
+ */
+
+html.linear {
+  --linear-canvas: #08090a;
+  --linear-surface: #0f1012;
+  --linear-hover: #16181c;
+  --linear-hover-strong: #1d2025;
+  --linear-row-hover: #141519;
+  --linear-border: rgba(255, 255, 255, 0.08);
+  --linear-border-strong: rgba(255, 255, 255, 0.1);
+  --linear-row-border: rgba(255, 255, 255, 0.06);
+  --linear-text: #f7f8f8;
+  --linear-muted: #8a8f98;
+  --linear-accent: #5e6ad2;
+  --linear-accent-hover: #6e7ae2;
+  --linear-link: #8d96eb;
+
+  /* Status tints: background, text, border. */
+  --linear-green-bg: rgba(46, 160, 67, 0.15);
+  --linear-green: #3fb950;
+  --linear-green-border: rgba(63, 185, 80, 0.3);
+  --linear-red-bg: rgba(248, 81, 73, 0.15);
+  --linear-red: #f85149;
+  --linear-red-border: rgba(248, 81, 73, 0.3);
+  --linear-amber-bg: rgba(210, 153, 34, 0.15);
+  --linear-amber: #d29922;
+  --linear-amber-border: rgba(210, 153, 34, 0.3);
+  --linear-blue-bg: rgba(56, 139, 253, 0.15);
+  --linear-blue: #58a6ff;
+  --linear-blue-border: rgba(56, 139, 253, 0.3);
+  --linear-violet-bg: rgba(94, 106, 210, 0.18);
+  --linear-violet: #a5adf0;
+  --linear-violet-border: rgba(94, 106, 210, 0.4);
+  --linear-gray-bg: rgba(138, 143, 152, 0.15);
+  --linear-gray: #b4b9c1;
+  --linear-gray-border: rgba(138, 143, 152, 0.3);
+
+  /* Variables used by App.css. */
+  --background-color: var(--linear-canvas);
+  --color-primary: var(--linear-accent);
+  --color-secondary: var(--linear-hover);
+  --color-warning: var(--linear-amber);
+  --color-success: var(--linear-accent);
+  --color-submit: var(--linear-accent);
+  --color-select: var(--linear-hover);
+  --color-link: var(--linear-link);
+  --color-light: var(--linear-hover);
+  --color-text: var(--linear-text);
+  --color-text-body: var(--linear-text);
+  --color-text-nav: var(--linear-muted);
+  --color-text-form-help: var(--linear-muted);
+  --color-error: var(--linear-red);
+  --color-danger: var(--linear-red);
+  --color-badge-warning: var(--linear-amber);
+  --color-badge-primary: var(--linear-accent);
+  --color-badge-secondary: var(--linear-muted);
+  --color-badge-info: var(--linear-blue);
+  --color-badge-danger: var(--linear-red);
+  --color-badge-success: var(--linear-green);
+  --color-sidebar-bg: var(--linear-surface);
+  --color-sidebar-border: var(--linear-border);
+  --color-sidebar-hover: var(--linear-hover);
+  --color-sidebar-active: var(--linear-hover);
+
+  /* Bootstrap. */
+  --bs-body-bg: var(--linear-canvas);
+  --bs-body-bg-rgb: 8, 9, 10;
+  --bs-body-color: var(--linear-text);
+  --bs-body-color-rgb: 247, 248, 248;
+  --bs-emphasis-color: var(--linear-text);
+  --bs-secondary-color: var(--linear-muted);
+  --bs-tertiary-color: var(--linear-muted);
+  --bs-secondary-bg: var(--linear-hover);
+  --bs-tertiary-bg: var(--linear-surface);
+  --bs-border-color: var(--linear-border);
+  --bs-border-color-translucent: var(--linear-border);
+  --bs-heading-color: var(--linear-text);
+  --bs-link-color: var(--linear-link);
+  --bs-link-color-rgb: 141, 150, 235;
+  --bs-link-hover-color: var(--linear-accent-hover);
+  --bs-link-hover-color-rgb: 110, 122, 226;
+  --bs-primary: var(--linear-accent);
+  --bs-primary-rgb: 94, 106, 210;
+  --bs-focus-ring-color: rgba(94, 106, 210, 0.35);
+  --bs-border-radius: 6px;
+  --bs-border-radius-sm: 5px;
+  --bs-border-radius-lg: 8px;
+
+  color-scheme: dark;
+}
+
+html.linear body {
+  background-color: var(--linear-canvas);
+  color: var(--linear-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+html.linear #kopia h1,
+html.linear #kopia h2,
+html.linear #kopia h3,
+html.linear #kopia h4,
+html.linear #kopia h5,
+html.linear #kopia h6 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+html.linear #kopia a {
+  text-decoration: none;
+}
+
+html.linear #kopia a:hover {
+  filter: none;
+  color: var(--linear-accent-hover);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+html.linear #kopia .app-sidebar a:hover,
+html.linear #kopia a.btn:hover,
+html.linear #kopia .nav-tabs a:hover {
+  text-decoration: none;
+}
+
+html.linear #kopia hr {
+  border-color: var(--linear-border);
+  opacity: 1;
+}
+
+html.linear #kopia .text-muted,
+html.linear #kopia .version-info {
+  color: var(--linear-muted) !important;
+}
+
+/* Sidebar. */
+
+html.linear #kopia .app-sidebar .nav-link {
+  font-weight: 500;
+}
+
+html.linear #kopia .app-sidebar .nav-link:hover,
+html.linear #kopia .app-sidebar .nav-link.active {
+  color: var(--linear-text);
+}
+
+html.linear #kopia .app-sidebar .active .app-sidebar-icon {
+  color: var(--linear-text);
+}
+
+html.linear #kopia .app-sidebar-count {
+  color: var(--linear-violet);
+  background-color: var(--linear-violet-bg);
+  border: 1px solid var(--linear-violet-border);
+}
+
+html.linear #kopia .app-repo-description h5 {
+  color: var(--linear-muted);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+/* Tables: no stripes or vertical borders, hairline row separators, quiet headers. */
+
+html.linear #kopia .table {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--linear-text);
+  --bs-table-border-color: var(--linear-row-border);
+  --bs-table-striped-bg: transparent;
+  --bs-table-striped-color: var(--linear-text);
+  --bs-table-hover-bg: var(--linear-row-hover);
+  --bs-table-hover-color: var(--linear-text);
+  --bs-table-active-bg: var(--linear-row-hover);
+  color: var(--linear-text);
+  border-color: var(--linear-row-border);
+  font-variant-numeric: tabular-nums;
+}
+
+html.linear #kopia .table > :not(caption) > * {
+  border-width: 0;
+}
+
+html.linear #kopia .table > :not(caption) > * > * {
+  border-width: 0 0 1px 0;
+  border-color: var(--linear-row-border);
+  background-color: transparent;
+  box-shadow: none;
+  color: var(--linear-text);
+}
+
+html.linear #kopia .table > thead > tr > * {
+  white-space: nowrap;
+  color: var(--linear-muted);
+  font-weight: 500;
+  font-size: 0.85em;
+  border-bottom-color: var(--linear-border);
+}
+
+/* Short values (sizes are rendered as a bare <span>) stay on one line; long paths and
+   other links give way instead. */
+html.linear #kopia .table td > span {
+  white-space: nowrap;
+}
+
+html.linear #kopia .table td a {
+  overflow-wrap: anywhere;
+}
+
+html.linear #kopia .table-hover > tbody > tr:hover > * {
+  background-color: var(--linear-row-hover);
+}
+
+/* Numbers line up in columns wherever they show up. */
+html.linear #kopia td,
+html.linear #kopia .counter-badge,
+html.linear #kopia .badge,
+html.linear #kopia .pagination,
+html.linear #kopia .form-text {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Buttons. */
+
+html.linear #kopia .btn {
+  border-radius: 6px;
+  box-shadow: none;
+  font-weight: 500;
+  color: var(--linear-text);
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+html.linear #kopia .btn:hover,
+html.linear #kopia .btn:focus,
+html.linear #kopia .btn:active {
+  filter: none;
+}
+
+html.linear #kopia .btn:focus-visible {
+  box-shadow: 0 0 0 2px var(--bs-focus-ring-color);
+}
+
+html.linear #kopia .btn:disabled,
+html.linear #kopia .btn.disabled {
+  filter: none;
+  opacity: 0.45;
+}
+
+html.linear #kopia .btn-primary,
+html.linear #kopia .btn-submit,
+html.linear #kopia .btn-success {
+  color: #ffffff;
+  background-color: var(--linear-accent);
+  border: 1px solid var(--linear-accent);
+}
+
+html.linear #kopia .btn-primary:hover,
+html.linear #kopia .btn-primary:active,
+html.linear #kopia .btn-submit:hover,
+html.linear #kopia .btn-submit:active,
+html.linear #kopia .btn-success:hover,
+html.linear #kopia .btn-success:active {
+  color: #ffffff;
+  background-color: var(--linear-accent-hover);
+  border-color: var(--linear-accent-hover);
+}
+
+html.linear #kopia .btn-secondary,
+html.linear #kopia .btn-light,
+html.linear #kopia .btn-info,
+html.linear #kopia .btn-dark,
+html.linear #kopia .btn-outline-secondary {
+  color: var(--linear-text);
+  background-color: var(--linear-hover);
+  border: 1px solid var(--linear-border-strong);
+}
+
+html.linear #kopia .btn-secondary:hover,
+html.linear #kopia .btn-secondary:active,
+html.linear #kopia .btn-light:hover,
+html.linear #kopia .btn-light:active,
+html.linear #kopia .btn-info:hover,
+html.linear #kopia .btn-info:active,
+html.linear #kopia .btn-dark:hover,
+html.linear #kopia .btn-dark:active,
+html.linear #kopia .btn-outline-secondary:hover,
+html.linear #kopia .btn-outline-secondary:active {
+  color: var(--linear-text);
+  background-color: var(--linear-hover-strong);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+/* Keep the accent for a page's main action: row actions, dropdown toggles and icon
+   buttons use the secondary look even when the markup says primary. */
+html.linear #kopia .table .btn-primary,
+html.linear #kopia .table .btn-success,
+html.linear #kopia .btn-primary.dropdown-toggle,
+html.linear #kopia .btn-primary:has(> svg:only-child) {
+  color: var(--linear-text);
+  background-color: var(--linear-hover);
+  border: 1px solid var(--linear-border-strong);
+}
+
+html.linear #kopia .table .btn-primary:hover,
+html.linear #kopia .table .btn-success:hover,
+html.linear #kopia .btn-primary.dropdown-toggle:hover,
+html.linear #kopia .btn-primary.dropdown-toggle.show,
+html.linear #kopia .btn-primary:has(> svg:only-child):hover {
+  color: var(--linear-text);
+  background-color: var(--linear-hover-strong);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+html.linear #kopia .table .btn {
+  white-space: nowrap;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.85em;
+}
+
+html.linear #kopia .btn-danger {
+  color: var(--linear-red);
+  background-color: var(--linear-red-bg);
+  border: 1px solid var(--linear-red-border);
+}
+
+html.linear #kopia .btn-danger:hover,
+html.linear #kopia .btn-danger:active {
+  color: #ffffff;
+  background-color: #da3633;
+  border-color: #da3633;
+}
+
+html.linear #kopia .btn-warning {
+  color: var(--linear-amber);
+  background-color: var(--linear-amber-bg);
+  border: 1px solid var(--linear-amber-border);
+}
+
+html.linear #kopia .btn-warning:hover,
+html.linear #kopia .btn-warning:active {
+  color: #ffffff;
+  background-color: #9e6a03;
+  border-color: #9e6a03;
+}
+
+html.linear #kopia .btn-link {
+  color: var(--linear-link);
+  background-color: transparent;
+  border-color: transparent;
+}
+
+/* Badges: tinted pills instead of solid colours. */
+
+html.linear #kopia .badge {
+  border-radius: 999px;
+  font-weight: 500;
+  padding: 0.3em 0.65em;
+  border: 1px solid var(--linear-gray-border);
+  color: var(--linear-gray);
+  background-color: var(--linear-gray-bg);
+}
+
+html.linear #kopia .badge.bg-success,
+html.linear #kopia .badge.bg-retention-badge-success {
+  color: var(--linear-green);
+  background-color: var(--linear-green-bg) !important;
+  border-color: var(--linear-green-border);
+}
+
+html.linear #kopia .badge.bg-danger,
+html.linear #kopia .badge.bg-retention-badge-danger {
+  color: var(--linear-red);
+  background-color: var(--linear-red-bg) !important;
+  border-color: var(--linear-red-border);
+}
+
+html.linear #kopia .badge.bg-warning,
+html.linear #kopia .badge.bg-retention-badge-warning {
+  color: var(--linear-amber) !important;
+  background-color: var(--linear-amber-bg) !important;
+  border-color: var(--linear-amber-border);
+}
+
+html.linear #kopia .badge.bg-info,
+html.linear #kopia .badge.bg-retention-badge-info {
+  color: var(--linear-blue);
+  background-color: var(--linear-blue-bg) !important;
+  border-color: var(--linear-blue-border);
+}
+
+html.linear #kopia .badge.bg-primary,
+html.linear #kopia .badge.bg-retention-badge-primary,
+html.linear #kopia .badge.bg-policy-badge,
+html.linear #kopia .badge.bg-snapshot-pin {
+  color: var(--linear-violet);
+  background-color: var(--linear-violet-bg) !important;
+  border-color: var(--linear-violet-border);
+}
+
+html.linear #kopia .badge.bg-secondary,
+html.linear #kopia .badge.bg-retention-badge-secondary {
+  color: var(--linear-gray);
+  background-color: var(--linear-gray-bg) !important;
+  border-color: var(--linear-gray-border);
+}
+
+/* Alerts, same tints. */
+
+html.linear #kopia .alert {
+  border-radius: 8px;
+  color: var(--linear-text);
+  background-color: var(--linear-surface);
+  border: 1px solid var(--linear-border);
+}
+
+html.linear #kopia .alert-success {
+  background-color: var(--linear-green-bg);
+  border-color: var(--linear-green-border);
+}
+
+html.linear #kopia .alert-danger {
+  background-color: var(--linear-red-bg);
+  border-color: var(--linear-red-border);
+}
+
+html.linear #kopia .alert-warning {
+  background-color: var(--linear-amber-bg);
+  border-color: var(--linear-amber-border);
+}
+
+html.linear #kopia .alert-info,
+html.linear #kopia .alert-primary {
+  background-color: var(--linear-blue-bg);
+  border-color: var(--linear-blue-border);
+}
+
+/* Forms. */
+
+html.linear #kopia .form-control,
+html.linear #kopia .form-control-sm,
+html.linear #kopia .form-select,
+html.linear #kopia .input-group-text {
+  color: var(--linear-text);
+  background-color: var(--linear-hover);
+  border: 1px solid var(--linear-border-strong);
+  border-radius: 6px;
+}
+
+html.linear #kopia .form-control:disabled,
+html.linear #kopia .form-select:disabled {
+  color: var(--linear-muted);
+  background-color: var(--linear-surface);
+}
+
+html.linear #kopia .form-select:focus,
+html.linear #kopia .form-control:focus,
+html.linear #kopia .form-control-sm:focus,
+html.linear #kopia .form-check-input:focus {
+  color: var(--linear-text);
+  border-color: var(--linear-accent);
+  box-shadow: 0 0 0 2px var(--bs-focus-ring-color);
+}
+
+html.linear #kopia .form-check-input {
+  background-color: var(--linear-hover);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+html.linear #kopia .form-check-input:checked {
+  background-color: var(--linear-accent);
+  border-color: var(--linear-accent);
+}
+
+html.linear #kopia .form-label {
+  color: var(--linear-text);
+  font-weight: 500;
+}
+
+/* Surfaces: modals, cards, accordions, dropdowns, popovers. */
+
+html.linear #kopia .modal-content,
+html.linear .popover,
+html.linear #kopia .dropdown-menu,
+html.linear #kopia .card {
+  color: var(--linear-text);
+  background-color: var(--linear-surface);
+  border: 1px solid var(--linear-border);
+  border-radius: 8px;
+}
+
+html.linear #kopia .modal-header,
+html.linear #kopia .modal-body,
+html.linear #kopia .modal-footer {
+  background-color: var(--linear-surface);
+  border-color: var(--linear-border);
+}
+
+html.linear #kopia .dropdown-item {
+  color: var(--linear-text);
+}
+
+html.linear #kopia .dropdown-item:hover,
+html.linear #kopia .dropdown-item:focus {
+  background-color: var(--linear-hover);
+}
+
+html.linear #kopia .accordion {
+  --bs-accordion-bg: var(--linear-surface);
+  --bs-accordion-border-color: var(--linear-border);
+  --bs-accordion-btn-focus-box-shadow: none;
+}
+
+html.linear #kopia .accordion-item {
+  border: 1px solid var(--linear-border);
+}
+
+html.linear #kopia .accordion-body,
+html.linear #kopia .accordion-button,
+html.linear #kopia .accordion-button:not(.collapsed) {
+  color: var(--linear-text);
+  background-color: var(--linear-surface);
+  box-shadow: none;
+}
+
+html.linear #kopia .accordion-button {
+  font-weight: 500;
+}
+
+html.linear #kopia .accordion-button:hover,
+html.linear #kopia .accordion-button:focus,
+html.linear #kopia .accordion-button:active {
+  filter: none;
+  background-color: var(--linear-hover);
+}
+
+/* Tabs: underline the active tab in the accent colour. */
+
+html.linear #kopia .nav-tabs {
+  border-bottom: 1px solid var(--linear-border);
+}
+
+html.linear #kopia .nav-tabs .nav-link {
+  color: var(--linear-muted);
+  background-color: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  font-weight: 500;
+}
+
+html.linear #kopia .nav-tabs .nav-link:hover {
+  color: var(--linear-text);
+  filter: none;
+}
+
+html.linear #kopia .nav-tabs .nav-link.active {
+  color: var(--linear-text);
+  background-color: transparent;
+  border-bottom-color: var(--linear-accent);
+}
+
+html.linear #kopia div.tab-body {
+  border-color: var(--linear-border);
+}
+
+/* Breadcrumbs and pagination. */
+
+html.linear #kopia .breadcrumb-item.active {
+  color: var(--linear-text);
+}
+
+html.linear #kopia .pagination,
+html.linear #kopia .pagination-sm {
+  --bs-pagination-color: var(--linear-muted);
+  --bs-pagination-bg: transparent;
+  --bs-pagination-border-color: var(--linear-border);
+  --bs-pagination-hover-color: var(--linear-text);
+  --bs-pagination-hover-bg: var(--linear-hover);
+  --bs-pagination-hover-border-color: var(--linear-border-strong);
+  --bs-pagination-focus-bg: var(--linear-hover);
+  --bs-pagination-focus-box-shadow: 0 0 0 2px var(--bs-focus-ring-color);
+  --bs-pagination-disabled-color: rgba(138, 143, 152, 0.5);
+  --bs-pagination-disabled-bg: transparent;
+  --bs-pagination-disabled-border-color: var(--linear-border);
+  --bs-pagination-active-color: #ffffff;
+  --bs-pagination-active-bg: var(--linear-accent);
+  --bs-pagination-active-border-color: var(--linear-accent);
+}
+
+/* Boxes App.css draws with light-theme colours. */
+
+html.linear #kopia .advancedOptions,
+html.linear #kopia .providerSpecificParams {
+  color: var(--linear-text);
+  background-color: var(--linear-surface);
+  border: 1px solid var(--linear-border);
+  border-radius: 8px;
+}
+
+html.linear #kopia .logs-table {
+  border: 1px solid var(--linear-border);
+  border-radius: 6px;
+}
+
+html.linear #kopia .btn-close {
+  background-color: transparent;
+}
+
+html.linear #kopia .snapshot-description-set {
+  color: var(--linear-amber);
+}
+
+html.linear #kopia code {
+  color: var(--linear-violet);
+}
+
+/* Thin dark scrollbars (WebView2 / Chromium). */
+
+html.linear ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html.linear ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html.linear ::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+html.linear ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+/* Snapshots table. */
+
+html.linear #kopia .table > tbody > tr > td {
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+}
+
+html.linear #kopia .source-link .source-name {
+  color: var(--linear-text);
+  font-weight: 500;
+}
+
+html.linear #kopia .source-link .source-path {
+  color: var(--linear-muted);
+}
+
+html.linear #kopia .source-link:hover {
+  text-decoration: none;
+}
+
+html.linear #kopia .source-link:hover .source-path {
+  color: var(--linear-link);
+}
+
+html.linear #kopia .table .col-time .time-next,
+html.linear #kopia .table .col-time .time-none {
+  color: var(--linear-muted);
+}
+
+html.linear #kopia .upload-progress-bar {
+  --bs-progress-bg: var(--linear-hover);
+  --bs-progress-bar-bg: var(--linear-accent);
+  --bs-progress-border-radius: 999px;
+}

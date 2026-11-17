@@ -14,7 +14,11 @@ const DEFAULT_PREFERENCES = {
 } as SerializedUIPreferences;
 const PREFERENCES_URL = "/api/v1/ui-preferences";
 
-export type Theme = "light" | "dark" | "pastel" | "ocean";
+export type Theme = "light" | "dark" | "linear" | "pastel" | "ocean";
+
+// Themes with a dark background. Bootstrap renders its own components (form controls,
+// modals, close buttons) in dark mode for these through data-bs-theme.
+const BOOTSTRAP_DARK_THEMES: Theme[] = ["linear"];
 export type PageSize = 10 | 20 | 30 | 40 | 50 | 100;
 export type FontSize = "fs-6" | "fs-5" | "fs-4";
 
@@ -50,7 +54,7 @@ export interface UIPreferenceProviderProps {
  */
 function getDefaultTheme(): Theme {
   if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-    return "dark";
+    return "linear";
   }
   return "light";
 }
@@ -155,6 +159,11 @@ export function UIPreferenceProvider(props: UIPreferenceProviderProps) {
     const doc = document.querySelector("html")!;
     doc.classList.remove(...doc.classList);
     doc.classList.add(theme, fontSize);
+    if (BOOTSTRAP_DARK_THEMES.includes(theme)) {
+      doc.setAttribute("data-bs-theme", "dark");
+    } else {
+      doc.removeAttribute("data-bs-theme");
+    }
   };
 
   const providedValue = {

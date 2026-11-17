@@ -1,9 +1,19 @@
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./css/Theme.css";
 import "./css/App.css";
+import "./css/linear-theme.css";
 import axios from "axios";
 import { React, Component } from "react";
-import { Navbar, Nav, Container } from "react-bootstrap";
+import { Container } from "react-bootstrap";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faCamera,
+  faDatabase,
+  faGear,
+  faHardDrive,
+  faListCheck,
+  faShieldHalved,
+} from "@fortawesome/free-solid-svg-icons";
 import { BrowserRouter as Router, NavLink, Navigate, Route, Routes } from "react-router";
 import { Images } from "./pages/Images";
 import { Policy } from "./pages/Policy";
@@ -19,6 +29,15 @@ import { SnapshotHistory } from "./pages/SnapshotHistory";
 import { SnapshotRestore } from "./pages/SnapshotRestore";
 import { AppContext } from "./contexts/AppContext";
 import { UIPreferenceProvider } from "./contexts/UIPreferencesContext";
+
+const SIDEBAR_ITEMS = [
+  { to: "/snapshots", label: "Snapshots", testid: "tab-snapshots", icon: faCamera, needsRepository: true },
+  { to: "/images", label: "Images", testid: "tab-images", icon: faHardDrive, needsRepository: true },
+  { to: "/policies", label: "Policies", testid: "tab-policies", icon: faShieldHalved, needsRepository: true },
+  { to: "/tasks", label: "Tasks", testid: "tab-tasks", icon: faListCheck, needsRepository: true },
+  { to: "/repo", label: "Repository", testid: "tab-repo", icon: faDatabase, needsRepository: false },
+  { to: "/preferences", label: "Preferences", testid: "tab-preferences", icon: faGear, needsRepository: false },
+];
 
 export default class App extends Component {
   constructor() {
@@ -115,94 +134,62 @@ export default class App extends Component {
       <Router>
         <AppContext value={this}>
           <UIPreferenceProvider initalValue={uiPrefs}>
-            <Navbar expand="sm" variant="light">
-              <Navbar.Brand href="/">
-                <img src="/kopia-flat.svg" className="App-logo" alt="logo" />
-              </Navbar.Brand>
-              <Navbar.Toggle aria-controls="basic-navbar-nav" />
-              <Navbar.Collapse id="basic-navbar-nav">
-                <Nav className="me-auto">
-                  <span className="d-inline-block" data-toggle="tooltip" title="Repository is not connected">
-                    <NavLink
-                      data-testid="tab-snapshots"
-                      title=""
-                      data-title="Snapshots"
-                      className={isRepositoryConnected ? "nav-link" : "nav-link disabled"}
-                      to="/snapshots"
-                    >
-                      Snapshots
-                    </NavLink>
-                  </span>
-                  <span className="d-inline-block" data-toggle="tooltip" title="Repository is not connected">
-                    <NavLink
-                      data-testid="tab-images"
-                      title=""
-                      data-title="Images"
-                      className={isRepositoryConnected ? "nav-link" : "nav-link disabled"}
-                      to="/images"
-                    >
-                      Images
-                    </NavLink>
-                  </span>
-                  <span className="d-inline-block" data-toggle="tooltip" title="Repository is not connected">
-                    <NavLink
-                      data-testid="tab-policies"
-                      title=""
-                      data-title="Policies"
-                      className={isRepositoryConnected ? "nav-link" : "nav-link disabled"}
-                      to="/policies"
-                    >
-                      Policies
-                    </NavLink>
-                  </span>
-                  <span className="d-inline-block" data-toggle="tooltip" title="Repository is not connected">
-                    <NavLink
-                      data-testid="tab-tasks"
-                      title=""
-                      data-title="Tasks"
-                      className={isRepositoryConnected ? "nav-link" : "nav-link disabled"}
-                      to="/tasks"
-                    >
-                      Tasks
-                      <>{runningTaskCount > 0 && <>({runningTaskCount})</>}</>
-                    </NavLink>
-                  </span>
-                  <NavLink data-testid="tab-repo" data-title="Repository" className="nav-link" to="/repo">
-                    Repository
-                  </NavLink>
-                  <NavLink
-                    data-testid="tab-preferences"
-                    data-title="Preferences"
-                    className="nav-link"
-                    to="/preferences"
-                  >
-                    Preferences
-                  </NavLink>
-                </Nav>
-              </Navbar.Collapse>
-            </Navbar>
+            <div className="app-shell">
+              <nav className="app-sidebar" aria-label="Main">
+                <NavLink to="/" className="app-sidebar-brand" title="KopiaUI">
+                  <img src="/kopia-flat.svg" className="App-logo" alt="logo" />
+                </NavLink>
+                <div className="app-sidebar-nav">
+                  {SIDEBAR_ITEMS.map((item) => {
+                    const enabled = isRepositoryConnected || !item.needsRepository;
+                    return (
+                      <span
+                        key={item.to}
+                        className="app-sidebar-item"
+                        title={enabled ? item.label : "Repository is not connected"}
+                      >
+                        <NavLink
+                          data-testid={item.testid}
+                          className={enabled ? "nav-link" : "nav-link disabled"}
+                          aria-disabled={!enabled}
+                          to={item.to}
+                        >
+                          <FontAwesomeIcon icon={item.icon} className="app-sidebar-icon" />
+                          <span className="app-sidebar-label">{item.label}</span>
+                          {item.to === "/tasks" && runningTaskCount > 0 && (
+                            <span className="app-sidebar-count">{runningTaskCount}</span>
+                          )}
+                        </NavLink>
+                      </span>
+                    );
+                  })}
+                </div>
+              </nav>
 
-            <Container fluid>
-              <NavLink to="/repo" style={{ color: "inherit", textDecoration: "inherit" }}>
-                <h5 className="mb-4">{this.state.repoDescription}</h5>
-              </NavLink>
+              <main className="app-main">
+                <Container fluid>
+                  <NavLink to="/repo" className="app-repo-description">
+                    <h5 className="mb-4">{this.state.repoDescription}</h5>
+                  </NavLink>
 
-              <Routes>
-                <Route path="snapshots" element={<Snapshots />} />
-                <Route path="snapshots/new" element={<SnapshotCreate />} />
-                <Route path="snapshots/single-source/" element={<SnapshotHistory />} />
-                <Route path="snapshots/dir/:oid/restore" element={<SnapshotRestore />} />
-                <Route path="snapshots/dir/:oid" element={<SnapshotDirectory />} />
-                <Route path="images" element={<Images />} />
-                <Route path="policies/edit/" element={<Policy />} />
-                <Route path="policies" element={<Policies />} />
-                <Route path="tasks/:tid" element={<Task />} />
-                <Route path="tasks" element={<Tasks />} />
-                <Route path="repo" element={<Repository />} />
-                <Route path="preferences" element={<Preferences />} />
-                <Route path="/" element={<Navigate to="/snapshots" />} />
-              </Routes>
-            </Container>
+                  <Routes>
+                    <Route path="snapshots" element={<Snapshots />} />
+                    <Route path="snapshots/new" element={<SnapshotCreate />} />
+                    <Route path="snapshots/single-source/" element={<SnapshotHistory />} />
+                    <Route path="snapshots/dir/:oid/restore" element={<SnapshotRestore />} />
+                    <Route path="snapshots/dir/:oid" element={<SnapshotDirectory />} />
+                    <Route path="images" element={<Images />} />
+                    <Route path="policies/edit/" element={<Policy />} />
+                    <Route path="policies" element={<Policies />} />
+                    <Route path="tasks/:tid" element={<Task />} />
+                    <Route path="tasks" element={<Tasks />} />
+                    <Route path="repo" element={<Repository />} />
+                    <Route path="preferences" element={<Preferences />} />
+                    <Route path="/" element={<Navigate to="/snapshots" />} />
+                  </Routes>
+                </Container>
+              </main>
+            </div>
           </UIPreferenceProvider>
         </AppContext>
       </Router>

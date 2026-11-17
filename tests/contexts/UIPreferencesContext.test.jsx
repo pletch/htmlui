@@ -79,7 +79,7 @@ describe("UIPreferencesContext", () => {
       );
 
       await waitFor(() => {
-        expect(capturedPreferences.theme).toBe("dark");
+        expect(capturedPreferences.theme).toBe("linear");
       });
     });
   });
@@ -213,6 +213,37 @@ describe("UIPreferencesContext", () => {
       expect(axiosMock.history.put.length).toBeGreaterThan(0);
       const lastPutRequest = axiosMock.history.put[axiosMock.history.put.length - 1];
       expect(JSON.parse(lastPutRequest.data).theme).toBe("dark");
+    });
+
+    it("should switch Bootstrap to dark mode only for the linear theme", async () => {
+      let capturedPreferences;
+      render(
+        <UIPreferenceProvider>
+          <TestComponent onMount={(prefs) => (capturedPreferences = prefs)} />
+        </UIPreferenceProvider>,
+      );
+
+      await waitFor(() => {
+        expect(capturedPreferences.theme).toBe("light");
+      });
+
+      act(() => {
+        capturedPreferences.setTheme("linear");
+      });
+
+      await waitFor(() => {
+        expect(document.documentElement.classList.contains("linear")).toBe(true);
+        expect(document.documentElement.getAttribute("data-bs-theme")).toBe("dark");
+      });
+
+      act(() => {
+        capturedPreferences.setTheme("light");
+      });
+
+      await waitFor(() => {
+        expect(document.documentElement.classList.contains("linear")).toBe(false);
+        expect(document.documentElement.hasAttribute("data-bs-theme")).toBe(false);
+      });
     });
 
     it("should update font size and sync with HTML classes", async () => {

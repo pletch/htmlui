@@ -8,10 +8,11 @@ import Button from "react-bootstrap/Button";
 import Col from "react-bootstrap/Col";
 import Dropdown from "react-bootstrap/Dropdown";
 import Row from "react-bootstrap/Row";
+import ProgressBar from "react-bootstrap/ProgressBar";
 import Spinner from "react-bootstrap/Spinner";
 import { Link } from "react-router";
 import KopiaTable from "../components/KopiaTable";
-import { compare, formatOwnerName, sizeDisplayName } from "../utils/formatutils";
+import { baseName, compare, formatOwnerName, sizeDisplayName } from "../utils/formatutils";
 import { errorAlert, redirect, newDataBytesCell, snapshotSizeCell, uploadedBytesCell } from "../utils/uiutil";
 import { policyEditorURL, sourceQueryStringParams } from "../utils/policyutil";
 import { CLIEquivalent } from "../components/CLIEquivalent";
@@ -19,6 +20,25 @@ import { UIPreferencesContext } from "../contexts/UIPreferencesContext";
 
 const localSnapshots = "Local Snapshots";
 const allSnapshots = "All Snapshots";
+
+/**
+ * Shows a source as its folder name with the full path, and the owner when
+ * sources of several owners are listed, under it.
+ */
+function sourceCell(source, showOwner) {
+  const name = baseName(source.path);
+  return (
+    <Link
+      className="source-link"
+      to={"/snapshots/single-source?" + sourceQueryStringParams(source)}
+      title={formatOwnerName(source) + ":" + source.path}
+    >
+      {name && <span className="source-name">{name}</span>}
+      <span className="source-path">{source.path}</span>
+      {showOwner && <span className="source-owner">{formatOwnerName(source)}</span>}
+    </Link>
+  );
+}
 
 export class Snapshots extends Component {
   constructor() {
@@ -142,7 +162,7 @@ export class Snapshots extends Component {
       case "IDLE":
       case "PAUSED":
         return (
-          <>
+          <div className="row-actions">
             <Button
               data-testid="edit-policy"
               as={Link}
@@ -162,7 +182,7 @@ export class Snapshots extends Component {
             >
               Snapshot Now
             </Button>
-          </>
+          </div>
         );
 
       case "PENDING":
@@ -183,6 +203,7 @@ export class Snapshots extends Component {
         let u = x.row.original.upload;
         let title = "";
         let totals = "";
+        let percent = null;
         if (u) {
           title =
             " hashed " +
@@ -204,20 +225,28 @@ export class Snapshots extends Component {
           if (u.estimatedBytes) {
             totals += "/" + sizeDisplayName(u.estimatedBytes, bytesStringBase2);
 
-            const percent = Math.round((totalBytes * 1000.0) / u.estimatedBytes) / 10.0;
-            if (percent <= 100) {
-              totals += " " + percent + "%";
+            const p = Math.round((totalBytes * 1000.0) / u.estimatedBytes) / 10.0;
+            if (p <= 100) {
+              percent = p;
+              totals += " " + p + "%";
             }
           }
         }
 
         return (
-          <>
+          <div className="upload-progress">
             <Spinner data-testid="snapshot-uploading" animation="border" variant="primary" size="sm" title={title} />
-            &nbsp;{totals}
-            &nbsp;
+            {percent !== null && (
+              <ProgressBar
+                className="upload-progress-bar"
+                now={percent}
+                title={percent + "%"}
+                data-testid="snapshot-progress"
+              />
+            )}
+            <span className="upload-progress-text">{totals}</span>
             {x.row.original.currentTask && <Link to={"/tasks/" + x.row.original.currentTask}>Details</Link>}
-          </>
+          </div>
         );
       }
 
@@ -248,29 +277,38 @@ export class Snapshots extends Component {
       });
   }
 
-  nextSnapshotTimeCell(x) {
-    if (!x.cell.getValue()) {
-      if (x.row.original.status === "PAUSED") {
-        return "paused";
+  /**
+   * Shows when a source is snapshotted next, under its last snapshot time.
+   * @param source - the source's status entry from /api/v1/sources
+   */
+  nextSnapshotTimeCell(source) {
+    const next = source.nextSnapshotTime;
+    if (!next) {
+      if (source.status === "PAUSED") {
+        return (
+          <span className="time-next">
+            <Badge bg="secondary">paused</Badge>
+          </span>
+        );
       }
 
-      return "";
+      return null;
     }
 
-    if (x.row.original.status === "UPLOADING") {
-      return "";
+    if (source.status === "UPLOADING") {
+      return null;
     }
 
     return (
-      <p title={moment(x.cell.getValue()).toLocaleString()}>
-        {moment(x.cell.getValue()).fromNow()}
-        {moment(x.cell.getValue()).isBefore(moment()) && (
+      <span className="time-next" title={moment(next).toLocaleString()}>
+        next {moment(next).fromNow()}
+        {moment(next).isBefore(moment()) && (
           <>
-            &nbsp;
-            <Badge bg="secondary">overdue</Badge>
+            {" "}
+            <Badge bg="warning">overdue</Badge>
           </>
         )}
-      </p>
+      </span>
     );
   }
 
@@ -308,6 +346,9 @@ export class Snapshots extends Component {
         break;
     }
 
+    // The owner only tells rows apart when more than one is listed.
+    const showOwner = new Set(sources.map((x) => formatOwnerName(x.source))).size > 1;
+
     const columns = [
       {
         id: "path",
@@ -322,22 +363,14 @@ export class Snapshots extends Component {
           return compare(formatOwnerName(a.original.source), formatOwnerName(b.original.source));
         },
         width: "",
-        cell: (x) => (
-          <Link to={"/snapshots/single-source?" + sourceQueryStringParams(x.cell.getValue())}>
-            {x.cell.getValue().path}
-          </Link>
-        ),
-      },
-      {
-        id: "owner",
-        header: "Owner",
-        accessorFn: (x) => x.source.userName + "@" + x.source.host,
-        width: 250,
+        meta: { className: "col-source" },
+        cell: (x) => sourceCell(x.cell.getValue(), showOwner),
       },
       {
         id: "lastSnapshotSize",
         header: "Size",
         width: 120,
+        meta: { className: "col-num" },
         accessorFn: (x) => x.lastSnapshot?.imageBytesRead ?? x.lastSnapshot?.stats?.totalSize ?? 0,
         cell: (x) =>
           snapshotSizeCell(
@@ -351,6 +384,7 @@ export class Snapshots extends Component {
         id: "lastSnapshotNewData",
         header: "New Data",
         width: 120,
+        meta: { className: "col-num" },
         accessorFn: (x) => x.lastSnapshot?.newDataBytes ?? -1,
         cell: (x) => newDataBytesCell(x.cell.getValue(), bytesStringBase2),
       },
@@ -358,32 +392,34 @@ export class Snapshots extends Component {
         id: "lastSnapshotUploaded",
         header: "Stored",
         width: 120,
+        meta: { className: "col-num" },
         accessorFn: (x) => x.lastSnapshot?.uploadedBytes ?? -1,
         cell: (x) => uploadedBytesCell(x.cell.getValue(), bytesStringBase2),
       },
       {
         id: "lastSnapshotTime",
-        header: "Last Snapshot",
+        header: "Last / Next",
         width: 160,
+        meta: { className: "col-time" },
         accessorFn: (x) => (x.lastSnapshot ? x.lastSnapshot.startTime : null),
-        cell: (x) =>
-          x.cell.getValue() ? (
-            <p title={moment(x.cell.getValue()).toLocaleString()}>{moment(x.cell.getValue()).fromNow()}</p>
-          ) : (
-            ""
-          ),
-      },
-      {
-        id: "nextSnapshotTime",
-        header: "Next Snapshot",
-        width: 160,
-        accessorFn: (x) => x.nextSnapshotTime,
-        cell: (x) => this.nextSnapshotTimeCell(x),
+        cell: (x) => (
+          <>
+            {x.cell.getValue() ? (
+              <span className="time-last" title={moment(x.cell.getValue()).toLocaleString()}>
+                {moment(x.cell.getValue()).fromNow()}
+              </span>
+            ) : (
+              <span className="time-last time-none">never</span>
+            )}
+            {this.nextSnapshotTimeCell(x.row.original)}
+          </>
+        ),
       },
       {
         id: "status",
         header: "",
         width: 300,
+        meta: { className: "col-actions" },
         accessorFn: (x) => x.status,
         cell: (x) => this.statusCell(x, this, bytesStringBase2),
       },

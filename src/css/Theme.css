@@ -51,7 +51,13 @@
   --color-badge-info: #127d74;
   --color-badge-danger: #c14b0b;
   --color-badge-success: #498235;
+
+  --color-sidebar-border: rgba(255, 255, 255, 0.1);
+  --color-sidebar-hover: rgba(255, 255, 255, 0.06);
+  --color-sidebar-active: rgba(255, 255, 255, 0.1);
 }
+
+/* The linear theme is in linear-theme.css. */
 
 .pastel {
   --background-color: #ffffff;
