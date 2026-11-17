@@ -752,3 +752,135 @@ div.tab-body {
   width: 1em;
   color: var(--color-text-form-help);
 }
+
+/* Disk Images page: a disk map of partition tiles like Macrium Reflect's, a
+   toolbar and the images grouped by disk. */
+.disk-map {
+  border: 1px solid var(--bs-border-color);
+  border-radius: 6px;
+  padding: 10px 12px 12px;
+}
+
+.disk-map-header {
+  margin-bottom: 8px;
+}
+
+.disk-map-tiles {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.disk-tile {
+  overflow: hidden;
+  flex-basis: 0;
+  min-width: 128px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--bs-border-color);
+  font-size: 0.85em;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.disk-tile-skipped {
+  opacity: 0.6;
+}
+
+.disk-tile-title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.disk-tile-kind,
+.disk-tile-sizes {
+  color: var(--bs-secondary-color);
+  white-space: nowrap;
+}
+
+.disk-tile-kind {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.disk-tile-sizes {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.disk-usage {
+  height: 10px;
+  margin: 4px 0;
+  border: 1px solid var(--bs-border-color);
+  background: var(--bs-body-bg);
+}
+
+.disk-usage-used {
+  height: 100%;
+  background: var(--bs-primary);
+}
+
+/* a partition imaged as raw bytes is stored whole */
+.disk-usage-whole .disk-usage-used {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--bs-secondary-color),
+    var(--bs-secondary-color) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+}
+
+#kopia .disk-tile-browse {
+  align-self: flex-start;
+  padding: 0;
+  font-size: 1em;
+  color: var(--bs-link-color);
+}
+
+.image-filters {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.image-disk-filter {
+  width: auto;
+  min-width: 220px;
+}
+
+.image-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.image-group-name {
+  font-weight: 600;
+}
+
+.image-group-host {
+  color: var(--bs-secondary-color);
+}
+
+.image-list .image-group td {
+  cursor: pointer;
+  background: var(--bs-tertiary-bg);
+}
+
+.image-list .image-row {
+  cursor: pointer;
+}
+
+.image-list .image-row .image-name {
+  padding-left: 2.2em;
+}
+
+#kopia .image-list .image-row.table-active > td:first-child {
+  box-shadow: inset 3px 0 0 var(--bs-primary);
+}

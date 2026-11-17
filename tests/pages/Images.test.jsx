@@ -168,10 +168,19 @@ describe("Images page", () => {
     mockLists(scheduledStatus());
     renderImages();
 
-    await waitFor(() => expect(screen.getByText("Disk images of this computer")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Disk Images")).toBeInTheDocument());
 
-    expect(screen.getByText("Disk 0f6ab3f2-1c3d-4e5f-8a9b-0c1d2e3f4a51")).toBeInTheDocument();
+    // the images are grouped by disk; the newest is selected and its disk shown
+    expect(
+      screen.getByText("Disk 0f6ab3f2-1c3d-4e5f-8a9b-0c1d2e3f4a51", { selector: ".image-group-name" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("(1 image)")).toBeInTheDocument();
+    expect(screen.getByTestId("image-row-m1")).toHaveClass("table-active");
+    expect(screen.getByTestId("disk-map")).toHaveTextContent("Disk 0f6ab3f2-1c3d-4e5f-8a9b-0c1d2e3f4a51");
     expect(screen.getByText("p3-C.img")).toBeInTheDocument();
+    for (const tab of ["Images", "Schedule", "Recovery Media", "Drivers"]) {
+      expect(screen.getByRole("tab", { name: tab })).toBeInTheDocument();
+    }
     expect(screen.getByText("Disk Size")).toBeInTheDocument();
     expect(screen.getByText("New Data")).toBeInTheDocument();
     expect(screen.getByText("Stored")).toBeInTheDocument();
@@ -187,9 +196,151 @@ describe("Images page", () => {
     expect(screen.getByText(/written to usb/)).toBeInTheDocument();
     expect(screen.getByTestId("run-image-task")).toBeEnabled();
 
-    // the start time links to the snapshot browser
-    const links = screen.getAllByTestId("link");
-    expect(links.some((l) => l.getAttribute("href") === "/snapshots/dir/k1234")).toBe(true);
+    // Contents links to the image's files in the snapshot browser
+    expect(screen.getByTestId("image-files")).toHaveAttribute("href", "/snapshots/dir/k1234");
+  });
+
+  test("shows the selected image's partitions as a disk map", async () => {
+    const withLayout = {
+      ...image,
+      diskSize: 1000204886016,
+      volumes: [
+        { entryName: "p1.img", partitionNumber: 1, kind: "raw", size: 104857600 },
+        { entryName: "p3-C.img", partitionNumber: 3, kind: "ntfs", size: 500000000000, freeBytes: 200000000000 },
+      ],
+      partitions: [
+        {
+          number: 1,
+          name: "EFI system partition",
+          typeGuid: "c12a7328-f81f-11d2-ba4b-00a0c93ec93b",
+          length: 104857600,
+        },
+        {
+          number: 2,
+          name: "Microsoft reserved partition",
+          typeGuid: "e3c9e316-0b5c-4db8-817d-f92df00215ae",
+          length: 16777216,
+        },
+        {
+          number: 3,
+          name: "Basic data partition",
+          typeGuid: "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7",
+          length: 500000000000,
+        },
+      ],
+    };
+    axiosMock.onGet("/api/v1/images").reply(200, { images: [withLayout], localHost: "pc", localUsername: "u" });
+    axiosMock.onGet("/api/v1/images/status").reply(200, scheduledStatus());
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("disk-tile-3")).toBeInTheDocument());
+
+    expect(screen.getByTestId("disk-map")).toHaveTextContent("<1 TB>");
+    expect(screen.getByTestId("disk-tile-1")).toHaveTextContent("1 - EFI system partition");
+    expect(screen.getByTestId("disk-tile-1")).toHaveTextContent("EFI System · Imaged whole");
+    expect(screen.getByTestId("disk-tile-2")).toHaveTextContent("Microsoft Reserved · Not imaged");
+    expect(screen.getByTestId("disk-tile-3")).toHaveTextContent("3 - (C:)");
+    expect(screen.getByTestId("disk-tile-3")).toHaveTextContent("Basic Data · NTFS");
+    expect(screen.getByTestId("disk-tile-3")).toHaveTextContent("300 GB500 GB"); // used, size
+    // only NTFS volumes can be browsed
+    expect(screen.getByTestId("browse-volume-3")).toBeInTheDocument();
+    expect(screen.queryByTestId("browse-volume-1")).not.toBeInTheDocument();
+  });
+
+  test("browses a volume: mounts the image and opens the volume's folder", async () => {
+    mockLists(scheduledStatus());
+    axiosMock.onGet("/api/v1/mounts").reply(200, { items: [] });
+    axiosMock.onPost("/api/v1/mounts").reply(200, { path: "K:", root: "k1234" });
+    window.kopiaUI = { browseDirectory: vi.fn() };
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("browse-volume-3")).toBeEnabled());
+    await userEvent.click(screen.getByTestId("browse-volume-3"));
+
+    await waitFor(() => expect(window.kopiaUI.browseDirectory).toHaveBeenCalledWith("K:\\p3-C"));
+    expect(JSON.parse(axiosMock.history.post.find((r) => r.url === "/api/v1/mounts").data)).toEqual({ root: "k1234" });
+    expect(screen.getByText("The image is mounted at K:.")).toBeInTheDocument();
+  });
+
+  test("in a browser, tells where a browsed image is mounted", async () => {
+    mockLists(scheduledStatus());
+    axiosMock.onPost("/api/v1/mounts").reply(200, { path: "/tmp/kopia-mount1", root: "k1234" });
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("browse-image")).toBeEnabled());
+    await userEvent.click(screen.getByTestId("browse-image"));
+
+    await waitFor(() => expect(screen.getByText(/its files are in \/tmp\/kopia-mount1\./)).toBeInTheDocument());
+  });
+
+  test("shows a mounted image and unmounts it", async () => {
+    mockLists(scheduledStatus());
+    axiosMock.onGet("/api/v1/mounts").reply(200, { items: [{ root: "k1234", path: "K:" }] });
+    axiosMock.onDelete("/api/v1/mounts/k1234").reply(200, {});
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("image-mounted")).toHaveTextContent("mounted K:"));
+    expect(screen.getByTestId("unmount-image")).toBeEnabled();
+
+    axiosMock.onGet("/api/v1/mounts").reply(200, { items: [] });
+    await userEvent.click(screen.getByTestId("unmount-image"));
+
+    await waitFor(() => expect(screen.getByText("The image is unmounted.")).toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByTestId("image-mounted")).not.toBeInTheDocument());
+    expect(screen.getByTestId("unmount-image")).toBeDisabled();
+  });
+
+  test("deletes the selected image after confirmation", async () => {
+    mockLists(scheduledStatus());
+    axiosMock.onPost("/api/v1/snapshots/delete").reply(200, {});
+    const confirm = vi.spyOn(window, "confirm");
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("delete-image")).toBeEnabled());
+
+    confirm.mockReturnValueOnce(false);
+    await userEvent.click(screen.getByTestId("delete-image"));
+    expect(axiosMock.history.post.some((r) => r.url === "/api/v1/snapshots/delete")).toBe(false);
+
+    confirm.mockReturnValueOnce(true);
+    await userEvent.click(screen.getByTestId("delete-image"));
+
+    await waitFor(() => expect(screen.getByText("The image is deleted.")).toBeInTheDocument());
+    expect(JSON.parse(axiosMock.history.post.find((r) => r.url === "/api/v1/snapshots/delete").data)).toEqual({
+      source: image.source,
+      snapshotManifestIds: ["m1"],
+    });
+    confirm.mockRestore();
+  });
+
+  test("selects an image, filters by disk and collapses a disk", async () => {
+    const older = { ...image, id: "m0", startTime: "2026-11-15T02:00:00Z", rootID: "k0" };
+    const otherDisk = {
+      ...image,
+      id: "d1",
+      rootID: "k9",
+      source: { ...image.source, path: "image:disk:aaaaaaaa-1c3d-4e5f-8a9b-0c1d2e3f4a51" },
+    };
+    axiosMock
+      .onGet("/api/v1/images")
+      .reply(200, { images: [image, older, otherDisk], localHost: "pc", localUsername: "u" });
+    axiosMock.onGet("/api/v1/images/status").reply(200, scheduledStatus());
+    renderImages();
+
+    await waitFor(() => expect(screen.getAllByTestId("image-group")).toHaveLength(2));
+    expect(screen.getByText("(2 images)")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId("image-row-m0"));
+    expect(screen.getByTestId("image-row-m0")).toHaveClass("table-active");
+    expect(screen.getByTestId("image-files")).toHaveAttribute("href", "/snapshots/dir/k0");
+
+    await userEvent.selectOptions(screen.getByTestId("image-disk-filter"), "Disk aaaaaaaa-1c3d-4e5f-8a9b-0c1d2e3f4a51");
+    expect(screen.getAllByTestId("image-group")).toHaveLength(1);
+    // the selection moves to an image that is shown
+    expect(screen.getByTestId("image-row-d1")).toHaveClass("table-active");
+
+    await userEvent.click(screen.getAllByTestId("image-group")[0]);
+    expect(screen.queryByTestId("image-row-d1")).not.toBeInTheDocument();
   });
 
   test("offers to set up the schedule when no task is installed", async () => {
@@ -506,9 +657,9 @@ describe("Images page", () => {
     await waitFor(() => expect(screen.getByText("p3-C.img")).toBeInTheDocument());
     await userEvent.click(screen.getByLabelText("All computers"));
 
-    // with images of two computers, each image names its computer
-    await waitFor(() => expect(screen.getByText("laptop", { selector: ".source-owner" })).toBeInTheDocument());
-    expect(screen.getByText("pc", { selector: ".source-owner" })).toBeInTheDocument();
+    // with images of two computers, each disk names its computer
+    await waitFor(() => expect(screen.getByText("on laptop", { selector: ".image-group-host" })).toBeInTheDocument());
+    expect(screen.getByText("on pc", { selector: ".image-group-host" })).toBeInTheDocument();
   });
 
   test("names the computer only when images of several computers are listed", async () => {
@@ -517,9 +668,9 @@ describe("Images page", () => {
 
     await waitFor(() => expect(screen.getByText("p3-C.img", { selector: ".source-path" })).toBeInTheDocument());
     expect(
-      screen.getByText("Disk 0f6ab3f2-1c3d-4e5f-8a9b-0c1d2e3f4a51", { selector: ".source-name" }),
+      screen.getByText("Disk 0f6ab3f2-1c3d-4e5f-8a9b-0c1d2e3f4a51", { selector: ".image-group-name" }),
     ).toBeInTheDocument();
-    expect(document.querySelector(".source-owner")).toBeNull();
+    expect(document.querySelector(".image-group-host")).toBeNull();
     // the start time shows how long the image took (1 hour in the sample)
     expect(screen.getByText(/^took /)).toBeInTheDocument();
   });

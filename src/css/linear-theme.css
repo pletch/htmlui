@@ -676,3 +676,49 @@ html.linear #kopia .upload-progress-bar {
   --bs-progress-bar-bg: var(--linear-accent);
   --bs-progress-border-radius: 999px;
 }
+
+/* Disk Images page */
+html.linear #kopia .disk-map {
+  border-color: var(--linear-border);
+  background: var(--linear-surface);
+}
+
+html.linear #kopia .disk-tile {
+  background: var(--linear-hover);
+  border-color: var(--linear-border-strong);
+}
+
+html.linear #kopia .disk-usage {
+  border-color: var(--linear-border-strong);
+  background: var(--linear-canvas);
+}
+
+html.linear #kopia .disk-usage-used {
+  background: var(--linear-accent);
+}
+
+html.linear #kopia .disk-usage-whole .disk-usage-used {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--linear-muted),
+    var(--linear-muted) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+}
+
+html.linear #kopia .image-list .image-group td {
+  background: var(--linear-surface);
+}
+
+html.linear #kopia .disk-tile-browse {
+  color: var(--linear-link);
+}
+
+html.linear #kopia .image-list .image-row.table-active > td {
+  background: var(--linear-hover-strong);
+}
+
+html.linear #kopia .image-list .image-row.table-active > td:first-child {
+  box-shadow: inset 3px 0 0 var(--linear-accent);
+}
