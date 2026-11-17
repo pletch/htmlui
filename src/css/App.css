@@ -618,7 +618,63 @@ div.tab-body {
   min-width: 12em;
 }
 
-/* A source: folder name, full path and owner on separate lines. */
+/* Snapshot history: checkbox, and the time, description and root ID of a snapshot. */
+#kopia .table .col-select {
+  width: 1%;
+}
+
+#kopia .snapshot-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+#kopia .snapshot-title .source-name {
+  white-space: nowrap;
+}
+
+#kopia .table .col-select .multiselect {
+  width: auto;
+  padding-left: 1.5em;
+  margin: 0;
+}
+
+/* Retention and pin pills wrap within their cell. */
+.retention-pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+#kopia .retention-pills .badge {
+  margin: 0;
+}
+
+#kopia .snapshot-description-text {
+  font-size: 85%;
+}
+
+#kopia .table .snapshot-hash {
+  font-size: 75%;
+  font-weight: normal;
+  color: var(--color-text-form-help);
+  overflow-wrap: anywhere;
+}
+
+/* Policies table: what each policy defines. */
+.policy-defined {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+#kopia .policy-defined .badge {
+  margin: 0;
+}
+
+/* A snapshot source or policy target: name, full path (or what the target
+   covers) and owner on separate lines. */
 #kopia .source-link {
   display: block;
   text-decoration: none;
@@ -664,4 +720,21 @@ div.tab-body {
 .upload-progress-bar {
   width: 80px;
   height: 6px;
+}
+
+/* Task status: spinner, pill and cancel button on one line. */
+#kopia .table .col-time .task-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#kopia .task-status .badge {
+  margin-block-start: 0;
+}
+
+#kopia .task-status .task-cancel {
+  padding: 0 2px;
+  margin: 0;
+  line-height: 1;
 }

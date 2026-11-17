@@ -3,10 +3,11 @@ import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BrowserRouter } from "react-router";
-import { Policies, PoliciesInternal } from "../../src/pages/Policies";
+import { Policies, PoliciesInternal, policyScope } from "../../src/pages/Policies";
 import { AppContext } from "../../src/contexts/AppContext";
 import { UIPreferencesContext } from "../../src/contexts/UIPreferencesContext";
 import { setupAPIMock } from "../testutils/api-mocks";
+import { policyEditorURL } from "../../src/utils/policyutil";
 import "@testing-library/jest-dom";
 import { mockNavigate, resetRouterMocks } from "../testutils/react-router-mock.jsx";
 
@@ -163,11 +164,33 @@ describe("Policies component - loaded state", () => {
     });
 
     // Check table headers
-    expect(screen.getByText("Username")).toBeInTheDocument();
-    expect(screen.getByText("Host")).toBeInTheDocument();
-    expect(screen.getByText("Path")).toBeInTheDocument();
-    expect(screen.getByText("Defined")).toBeInTheDocument();
-    expect(screen.getByText("Actions")).toBeInTheDocument();
+    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
+    expect(headers).toEqual(["Applies To", "Scope", "Defined", ""]);
+  });
+
+  test("describes each policy target with its scope", async () => {
+    renderWithProviders(<Policies />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Found 4 policies matching criteria.")).toBeInTheDocument();
+    });
+
+    // Global policy
+    expect(screen.getByText("Global policy", { selector: ".source-name" })).toBeInTheDocument();
+    expect(screen.getByText("Every user, host and folder")).toBeInTheDocument();
+    expect(screen.getByText("Global", { selector: ".badge" })).toBeInTheDocument();
+
+    // Per-host policy
+    expect(screen.getByText("testhost", { selector: ".source-name" })).toBeInTheDocument();
+    expect(screen.getByText("Every user on this host")).toBeInTheDocument();
+    expect(screen.getByText("Host", { selector: ".badge" })).toBeInTheDocument();
+
+    // Folder policies: folder name over the full path; one owner, so no owner line
+    expect(screen.getByText("testuser", { selector: ".source-name" })).toBeInTheDocument();
+    expect(screen.getByText("/home/testuser", { selector: ".source-path" })).toBeInTheDocument();
+    expect(screen.getByText("documents", { selector: ".source-name" })).toBeInTheDocument();
+    expect(screen.getAllByText("Folder", { selector: ".badge" })).toHaveLength(2);
+    expect(document.querySelector(".source-owner")).toBeNull();
   });
 
   test("displays CLI equivalent component", async () => {
@@ -184,6 +207,53 @@ describe("Policies component - loaded state", () => {
     await waitFor(() => {
       expect(screen.getByText("Page Size: 10")).toBeInTheDocument();
     });
+  });
+});
+
+describe("Policies component - owners of folder policies", () => {
+  test("shows the owner under the path when several owners are listed", async () => {
+    const policies = [
+      ...samplePolicies,
+      { target: { userName: "other", host: "otherhost", path: "/data" }, policy: { retention: { keepLatest: 1 } } },
+      { target: { userName: "other", host: "otherhost", path: "" }, policy: { retention: { keepLatest: 1 } } },
+    ];
+    axiosMock.onGet("/api/v1/policies").reply(200, { policies });
+    axiosMock.onGet("/api/v1/sources").reply(200, {
+      localUsername: "testuser",
+      localHost: "testhost",
+      multiUser: false,
+      sources: sampleSources,
+    });
+
+    renderWithProviders(<Policies />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Found 4 policies matching criteria.")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: /Applicable Policies/ }));
+    await userEvent.click(screen.getByText("All Policies"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Found 6 policies matching criteria.")).toBeInTheDocument();
+    });
+
+    // Folder policies get an owner line; the per-user policy shows its owner as the name.
+    expect(screen.getByText("other@otherhost", { selector: ".source-owner" })).toBeInTheDocument();
+    expect(screen.getAllByText("testuser@testhost", { selector: ".source-owner" })).toHaveLength(2);
+    expect(screen.getByText("other@otherhost", { selector: ".source-name" })).toBeInTheDocument();
+    expect(screen.getByText("Every folder of this user")).toBeInTheDocument();
+  });
+});
+
+describe("policyScope", () => {
+  test.each([
+    [{ userName: "", host: "", path: "" }, 0, "Global"],
+    [{ userName: null, host: "h", path: null }, 1, "Host"],
+    [{ userName: "u", host: "h", path: "" }, 2, "User"],
+    [{ userName: "u", host: "h", path: "/p" }, 3, "Folder"],
+  ])("%j is %i %s", (target, rank, label) => {
+    expect(policyScope(target)).toEqual({ rank, label });
   });
 });
 
@@ -557,16 +627,13 @@ describe("Policies component - policy summary", () => {
     renderWithProviders(<Policies />);
 
     await waitFor(() => {
-      // Check some policy data
-      expect(screen.getAllByText("testuser")).toHaveLength(2);
-      expect(screen.getAllByText("testhost")).toHaveLength(3);
       expect(screen.getByText("/home/testuser")).toBeInTheDocument();
       expect(screen.getByText("/documents")).toBeInTheDocument();
-      // Check for asterisks representing empty/global values
-      // Global policy: *, *, * (3 asterisks)
-      // Host policy: *, testhost, * (2 asterisks)
-      // Total: 5 asterisks
-      expect(screen.getAllByText("*")).toHaveLength(5);
     });
+
+    // Every row links its target to the policy editor and has an Edit button.
+    const links = [...document.querySelectorAll("a.source-link")].map((a) => a.getAttribute("href"));
+    expect(links.sort()).toEqual(samplePolicies.map((p) => policyEditorURL(p.target)).sort());
+    expect(screen.getAllByTestId("edit-policy")).toHaveLength(4);
   });
 });

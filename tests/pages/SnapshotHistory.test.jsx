@@ -22,12 +22,14 @@ vi.mock("react-router", async () => {
 });
 
 // Helper function to render component with required providers
-const renderWithProviders = (component) => {
+// Without a pageSize the table renders no rows; pass { pageSize: 10 } to render them.
+const renderWithProviders = (component, preferences = {}) => {
   const mockUIPreferences = {
     theme: "light",
     showIdenticalSnapshots: false,
     setShowIdenticalSnapshots: vi.fn(),
     bytesStringBase2: vi.fn((size) => `${size} bytes`), // Mock function for size formatting
+    ...preferences,
   };
 
   return render(
@@ -180,16 +182,12 @@ describe("SnapshotHistory", () => {
     renderWithProviders(<SnapshotHistory />);
 
     await waitFor(() => {
-      expect(screen.getByText("Selected")).toBeInTheDocument();
+      expect(screen.getByText("Snapshot")).toBeInTheDocument();
     });
 
     // Check all table headers
-    expect(screen.getByText("Start time")).toBeInTheDocument();
-    expect(screen.getByText("Root")).toBeInTheDocument();
-    expect(screen.getByText("Retention")).toBeInTheDocument();
-    expect(screen.getByText("Size")).toBeInTheDocument();
-    expect(screen.getByText("Files")).toBeInTheDocument();
-    expect(screen.getByText("Dirs")).toBeInTheDocument();
+    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
+    expect(headers).toEqual(["", "Snapshot", "Retention", "Size", "New Data", "Stored", "Files / Dirs"]);
   });
 
   it("should render CLI command button", async () => {
@@ -407,14 +405,39 @@ describe("SnapshotHistory", () => {
       renderWithProviders(<SnapshotHistory />);
 
       await waitFor(() => {
-        expect(screen.getByText("Selected")).toBeInTheDocument();
-        expect(screen.getByText("Start time")).toBeInTheDocument();
-        expect(screen.getByText("Root")).toBeInTheDocument();
+        expect(screen.getByText("Snapshot")).toBeInTheDocument();
         expect(screen.getByText("Retention")).toBeInTheDocument();
         expect(screen.getByText("Size")).toBeInTheDocument();
-        expect(screen.getByText("Files")).toBeInTheDocument();
-        expect(screen.getByText("Dirs")).toBeInTheDocument();
+        expect(screen.getByText("Files / Dirs")).toBeInTheDocument();
       });
+    });
+
+    it("shows the description and root ID under the start time, and dirs under files", async () => {
+      axios.get.mockResolvedValue({
+        data: {
+          snapshots: [
+            {
+              id: "snap1",
+              startTime: "2023-01-01T12:00:00Z",
+              rootID: "kabc123",
+              summary: { size: 1000, files: 1234, dirs: 56 },
+              retention: ["latest-1"],
+              pins: [],
+              description: "before the upgrade",
+            },
+          ],
+          unfilteredCount: 1,
+          uniqueCount: 1,
+        },
+      });
+      renderWithProviders(<SnapshotHistory />, { pageSize: 10, setPageSize: vi.fn(), bytesStringBase2: false });
+
+      await waitFor(() => {
+        expect(screen.getByText("kabc123", { selector: ".snapshot-hash" })).toBeInTheDocument();
+      });
+      expect(screen.getByText("before the upgrade", { selector: ".snapshot-description-text" })).toBeInTheDocument();
+      expect(screen.getByText((1234).toLocaleString())).toBeInTheDocument();
+      expect(screen.getByText("56 dirs")).toBeInTheDocument();
     });
 
     it("should handle delete API errors gracefully", async () => {

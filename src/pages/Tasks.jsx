@@ -12,7 +12,7 @@ import { Link } from "react-router";
 import { handleChange } from "../forms";
 import KopiaTable from "../components/KopiaTable";
 import { redirect } from "../utils/uiutil";
-import { taskStatusSymbol } from "../utils/taskutil";
+import { taskStatusPill } from "../utils/taskutil";
 
 export class Tasks extends Component {
   constructor() {
@@ -105,28 +105,34 @@ export class Tasks extends Component {
 
     const columns = [
       {
-        header: "Start Time",
-        width: 160,
+        id: "task",
+        header: "Task",
+        meta: { className: "col-source" },
+        accessorFn: (x) => x.description,
         cell: (x) => (
-          <Link to={"/tasks/" + x.row.original.id} title={moment(x.row.original.startTime).toLocaleString()}>
-            {moment(x.row.original.startTime).fromNow()}
+          <Link className="source-link" to={"/tasks/" + x.row.original.id}>
+            <span className="source-name">{x.row.original.description}</span>
+            <span className="source-path">{x.row.original.kind}</span>
           </Link>
         ),
       },
       {
+        id: "status",
         header: "Status",
-        width: 240,
-        cell: (x) => taskStatusSymbol(x.row.original),
+        meta: { className: "col-time" },
+        accessorFn: (x) => x.status,
+        cell: (x) => taskStatusPill(x.row.original),
       },
       {
-        header: "Kind",
-        width: "",
-        cell: (x) => <p>{x.row.original.kind}</p>,
-      },
-      {
-        header: "Description",
-        width: "",
-        cell: (x) => <p>{x.row.original.description}</p>,
+        id: "startTime",
+        header: "Started",
+        meta: { className: "col-time" },
+        accessorFn: (x) => x.startTime,
+        cell: (x) => (
+          <span title={moment(x.row.original.startTime).toLocaleString()}>
+            {moment(x.row.original.startTime).fromNow()}
+          </span>
+        ),
       },
     ];
 
