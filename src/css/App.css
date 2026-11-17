@@ -884,3 +884,25 @@ div.tab-body {
 #kopia .image-list .image-row.table-active > td:first-child {
   box-shadow: inset 3px 0 0 var(--bs-primary);
 }
+
+/* Text size preference: the root font size, from which Bootstrap's rem-based
+   text, padding and spacing follow. Small is compact like Windows backup
+   tools (Segoe UI at 13px); Bootstrap's own .fs-* classes would make the
+   root 16, 20 or 24px. */
+html.fs-6 {
+  font-size: 13px !important;
+}
+
+html.fs-5 {
+  font-size: 15px !important;
+}
+
+html.fs-4 {
+  font-size: 17px !important;
+}
+
+/* .active makes text bold for the active navigation item; Bootstrap also
+   marks the visible tab pane active, whose content is not meant to be bold. */
+#kopia .tab-pane.active {
+  font-weight: normal;
+}
