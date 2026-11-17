@@ -243,6 +243,50 @@ describe("Images page", () => {
     });
   });
 
+  test("pauses the schedule", async () => {
+    mockLists(scheduledStatus());
+    window.kopiaUI = { pauseImageSchedule: vi.fn().mockResolvedValue("done"), resumeImageSchedule: vi.fn() };
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("pause-schedule")).toHaveTextContent("Pause Schedule"));
+    expect(screen.queryByTestId("schedule-paused")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId("pause-schedule"));
+
+    await waitFor(() => expect(screen.getByText(/The schedule is paused/)).toBeInTheDocument());
+    expect(window.kopiaUI.pauseImageSchedule).toHaveBeenCalledTimes(1);
+    expect(window.kopiaUI.resumeImageSchedule).not.toHaveBeenCalled();
+  });
+
+  test("resumes a paused schedule, and creates images without its task meanwhile", async () => {
+    const st = scheduledStatus();
+    st.schedule = { ...st.schedule, paused: true };
+    mockLists(st);
+    mockDisks();
+    window.kopiaUI = {
+      pauseImageSchedule: vi.fn(),
+      resumeImageSchedule: vi.fn().mockResolvedValue("done"),
+      createImageElevated: vi.fn().mockResolvedValue("started"),
+    };
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("schedule-paused")).toBeInTheDocument());
+    expect(screen.getByTestId("schedule-summary")).toHaveTextContent("until the schedule is resumed");
+
+    // a paused task cannot start: the scheduled disks run in a console window
+    await userEvent.click(screen.getByTestId("run-image-task"));
+    await waitFor(() => expect(screen.getByLabelText(/Disk 3 - NVMe/)).toBeChecked());
+    expect(screen.getByTestId("create-image-how")).toHaveTextContent("console window");
+    await userEvent.click(screen.getByText("Cancel"));
+
+    expect(screen.getByTestId("pause-schedule")).toHaveTextContent("Resume Schedule");
+    await userEvent.click(screen.getByTestId("pause-schedule"));
+
+    await waitFor(() => expect(screen.getByText(/The schedule is resumed/)).toBeInTheDocument());
+    expect(window.kopiaUI.resumeImageSchedule).toHaveBeenCalledTimes(1);
+    expect(window.kopiaUI.pauseImageSchedule).not.toHaveBeenCalled();
+  });
+
   test("removes the schedule after confirmation", async () => {
     mockLists(scheduledStatus());
     window.kopiaUI = { removeImageSchedule: vi.fn().mockResolvedValue("done") };

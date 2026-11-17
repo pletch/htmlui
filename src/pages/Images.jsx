@@ -286,7 +286,17 @@ function ScheduleSettings({ status, busy, onUpdate }) {
 
   return (
     <>
-      <p data-testid="schedule-summary">{scheduleSummary(s)}</p>
+      <p data-testid="schedule-summary">
+        {s.paused && (
+          <>
+            <Badge bg="secondary" data-testid="schedule-paused">
+              Paused
+            </Badge>{" "}
+          </>
+        )}
+        {scheduleSummary(s)}
+        {s.paused && " Images are not created automatically until the schedule is resumed."}
+      </p>
       {status.scheduleForThisRepository === false && (
         <Alert variant="warning" data-testid="schedule-other-repository">
           <FontAwesomeIcon icon={faExclamationTriangle} /> The scheduled images go to another repository
@@ -318,6 +328,7 @@ function ImageStatus({
   onRun,
   onEdit,
   onRemove,
+  onPause,
   onUpdate,
   onCreateRecoveryMedia,
   busy,
@@ -361,6 +372,18 @@ function ImageStatus({
             <Button size="sm" variant="secondary" data-testid="edit-schedule" disabled={busy} onClick={onEdit}>
               {scheduled ? "Change Schedule..." : "Set Up Schedule..."}
             </Button>
+            {scheduled && window.kopiaUI?.pauseImageSchedule && (
+              <Button
+                size="sm"
+                variant="secondary"
+                data-testid="pause-schedule"
+                disabled={busy}
+                onClick={() => onPause(!!status.schedule?.paused)}
+                title="Asks for administrator rights; an image being created goes on"
+              >
+                {status.schedule?.paused ? "Resume Schedule" : "Pause Schedule"}
+              </Button>
+            )}
             {scheduled && window.kopiaUI?.removeImageSchedule && (
               <Button size="sm" variant="secondary" data-testid="remove-schedule" disabled={busy} onClick={onRemove}>
                 Remove Schedule
@@ -567,8 +590,31 @@ export function Images() {
     });
   };
 
-  // the schedule's disks, when the tasks are installed and their settings known
-  const scheduledVolumes = status?.tasks[0]?.scheduled ? status?.schedule?.volumes : undefined;
+  // the schedule's disks, when the tasks are installed, not paused, and their
+  // settings known: a paused task cannot be started
+  const scheduledVolumes =
+    status?.tasks[0]?.scheduled && !status?.schedule?.paused ? status?.schedule?.volumes : undefined;
+
+  const onPause = (resume) =>
+    act(
+      () =>
+        (resume ? window.kopiaUI.resumeImageSchedule() : window.kopiaUI.pauseImageSchedule()).then((result) => {
+          if (result === "canceled") {
+            return {
+              variant: "warning",
+              text: "The administrator prompt was declined, so the schedule did not change.",
+            };
+          }
+
+          return resume
+            ? { variant: "success", text: "The schedule is resumed: images are created on schedule again." }
+            : {
+                variant: "success",
+                text: "The schedule is paused: no image starts on schedule, nor retries, until it is resumed. An image being created goes on.",
+              };
+        }),
+      resume ? "Unable to resume the schedule" : "Unable to pause the schedule",
+    );
 
   const onCreateRecoveryMedia = () =>
     act(
@@ -640,6 +686,7 @@ export function Images() {
         onRun={onRun}
         onEdit={() => setEditing(true)}
         onRemove={onRemove}
+        onPause={onPause}
         onUpdate={onUpdate}
         onCreateRecoveryMedia={onCreateRecoveryMedia}
         busy={running}
