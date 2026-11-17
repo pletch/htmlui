@@ -12,7 +12,7 @@ import Spinner from "react-bootstrap/Spinner";
 import { Link } from "react-router";
 import KopiaTable from "../components/KopiaTable";
 import { compare, formatOwnerName, sizeDisplayName } from "../utils/formatutils";
-import { errorAlert, redirect, sizeWithFailures, uploadedBytesCell } from "../utils/uiutil";
+import { errorAlert, redirect, newDataBytesCell, sizeWithFailures, uploadedBytesCell } from "../utils/uiutil";
 import { policyEditorURL, sourceQueryStringParams } from "../utils/policyutil";
 import { CLIEquivalent } from "../components/CLIEquivalent";
 import { UIPreferencesContext } from "../contexts/UIPreferencesContext";
@@ -343,8 +343,15 @@ export class Snapshots extends Component {
           sizeWithFailures(x.cell.getValue(), x.row.original.lastSnapshot?.rootEntry?.summ ?? null, bytesStringBase2),
       },
       {
+        id: "lastSnapshotNewData",
+        header: "New Data",
+        width: 120,
+        accessorFn: (x) => x.lastSnapshot?.newDataBytes ?? -1,
+        cell: (x) => newDataBytesCell(x.cell.getValue(), bytesStringBase2),
+      },
+      {
         id: "lastSnapshotUploaded",
-        header: "Uploaded",
+        header: "Stored",
         width: 120,
         accessorFn: (x) => x.lastSnapshot?.uploadedBytes ?? -1,
         cell: (x) => uploadedBytesCell(x.cell.getValue(), bytesStringBase2),
