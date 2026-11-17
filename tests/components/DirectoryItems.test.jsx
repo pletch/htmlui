@@ -1,5 +1,6 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import "@testing-library/jest-dom";
 import { BrowserRouter } from "react-router";
@@ -63,11 +64,26 @@ describe("DirectoryItems", () => {
 
     // Should render the table structure but no data rows
     expect(screen.getByRole("table")).toBeInTheDocument();
-    expect(screen.getByText("Name")).toBeInTheDocument();
-    expect(screen.getByText("Last Modification")).toBeInTheDocument();
-    expect(screen.getByText("Size")).toBeInTheDocument();
-    expect(screen.getByText("Files")).toBeInTheDocument();
-    expect(screen.getByText("Directories")).toBeInTheDocument();
+    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
+    expect(headers).toEqual(["Name", "Modified", "Size", "Files / Dirs"]);
+  });
+
+  it("shows a folder or file icon before each name and lists folders first", async () => {
+    renderDirectoryItems({
+      items: [
+        { name: "a-file.txt", type: "f", obj: "o1", size: 1, mtime: "2023-12-15T10:30:00Z" },
+        { name: "z-dir", type: "d", obj: "kd1", mtime: "2023-12-15T10:30:00Z", summ: { files: 1, dirs: 0 } },
+      ],
+      historyState: mockHistoryState,
+    });
+
+    expect(screen.getByTestId("dir-icon")).toBeInTheDocument();
+    expect(screen.getByTestId("file-icon")).toBeInTheDocument();
+
+    // sorting by name puts folders before files
+    await userEvent.click(screen.getByText("Name"));
+    const names = [...document.querySelectorAll("tbody .dir-entry")].map((e) => e.textContent);
+    expect(names).toEqual(["z-dir/", "a-file.txt"]);
   });
 
   it("renders file item with direct download link", () => {
@@ -113,7 +129,7 @@ describe("DirectoryItems", () => {
     // Should display summary statistics (actual output is "10.5 MB")
     expect(screen.getByText("10.5 MB")).toBeInTheDocument();
     expect(screen.getByText("25")).toBeInTheDocument(); // Files count
-    expect(screen.getByText("3")).toBeInTheDocument(); // Directories count
+    expect(screen.getByText("3 dirs")).toBeInTheDocument(); // Directories count, under the files
   });
 
   it("handles file items without size gracefully", () => {

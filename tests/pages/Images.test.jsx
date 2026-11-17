@@ -3,7 +3,14 @@ import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
-import { Images, diskDisplayName, progressFraction, taskResultDisplayName } from "../../src/pages/Images";
+import {
+  Images,
+  diskDisplayName,
+  progressFraction,
+  taskResultDisplayName,
+  taskResultVariant,
+  taskStateVariant,
+} from "../../src/pages/Images";
 import { UIPreferencesContext } from "../../src/contexts/UIPreferencesContext";
 import { setupAPIMock } from "../testutils/api-mocks";
 
@@ -137,6 +144,26 @@ function mockLists(status) {
 }
 
 describe("Images page", () => {
+  test("shows 'never' as the last run of a task that has not run", async () => {
+    const st = scheduledStatus();
+    st.tasks = [
+      {
+        name: checkTask,
+        scheduled: true,
+        status: "Ready",
+        nextRunTime: "11/22/2026 12:00:00 PM",
+        lastRunTime: "11/30/1999 12:00:00 AM",
+        lastResult: "267011",
+      },
+    ];
+    mockLists(st);
+    renderImages();
+
+    await waitFor(() => expect(screen.getByText("Has not run yet", { selector: "td .badge" })).toBeInTheDocument());
+    expect(screen.getByText("never")).toBeInTheDocument();
+    expect(screen.queryByText("11/30/1999 12:00:00 AM")).not.toBeInTheDocument();
+  });
+
   test("lists images and the schedule", async () => {
     mockLists(scheduledStatus());
     renderImages();
@@ -151,8 +178,12 @@ describe("Images page", () => {
     expect(screen.getByText("9 GB")).toBeInTheDocument();
     expect(screen.getByText("3 GB")).toBeInTheDocument();
     expect(screen.getByText(/new data 9 GB, stored 3 GB/)).toBeInTheDocument();
-    expect(screen.getByText(createTask)).toBeInTheDocument();
-    expect(screen.getByText("Succeeded", { selector: "td" })).toBeInTheDocument();
+    // scheduled tasks: short name over the full path; status and result as pills
+    expect(screen.getByText(createTask, { selector: ".source-path" })).toBeInTheDocument();
+    expect(screen.getByText("Image create", { selector: ".source-name" })).toBeInTheDocument();
+    expect(screen.getByText("Ready", { selector: "td .badge" })).toHaveClass("bg-secondary");
+    expect(screen.getByText("Succeeded", { selector: "td .badge" })).toHaveClass("bg-success");
+    expect(screen.getByText("not scheduled", { selector: "td .badge" })).toBeInTheDocument();
     expect(screen.getByText(/written to usb/)).toBeInTheDocument();
     expect(screen.getByTestId("run-image-task")).toBeEnabled();
 
@@ -679,6 +710,21 @@ describe("Images helpers", () => {
     expect(taskResultDisplayName("1")).toBe("Failed (0x1)");
     expect(taskResultDisplayName("-2147024891")).toBe("Failed (0x80070005)");
     expect(taskResultDisplayName("")).toBe("");
+  });
+
+  test("taskResultVariant and taskStateVariant", () => {
+    expect(taskResultVariant("0")).toBe("success");
+    expect(taskResultVariant("267009")).toBe("primary");
+    expect(taskResultVariant("267011")).toBe("secondary");
+    expect(taskResultVariant("267014")).toBe("secondary");
+    expect(taskResultVariant("1")).toBe("danger");
+    expect(taskResultVariant("-2147024891")).toBe("danger");
+    expect(taskResultVariant("")).toBeNull();
+    expect(taskResultVariant(undefined)).toBeNull();
+
+    expect(taskStateVariant("Running")).toBe("primary");
+    expect(taskStateVariant("Disabled")).toBe("warning");
+    expect(taskStateVariant("Ready")).toBe("secondary");
   });
 
   test("diskDisplayName", () => {
