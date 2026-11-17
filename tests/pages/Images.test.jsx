@@ -642,8 +642,58 @@ describe("Images page", () => {
 
     await userEvent.click(screen.getByTestId("create-recovery-media"));
 
+    // no other computer stores drivers: the media gets this computer's own
+    await waitFor(() => expect(screen.getByTestId("media-no-driver-hosts")).toBeInTheDocument());
+    await userEvent.click(screen.getByTestId("build-recovery-media"));
+
     await waitFor(() => expect(screen.getByText(/Building recovery media in a console window/)).toBeInTheDocument());
-    expect(window.kopiaUI.createRecoveryMediaElevated).toHaveBeenCalledTimes(1);
+    expect(window.kopiaUI.createRecoveryMediaElevated).toHaveBeenCalledWith([]);
+  });
+
+  test("builds recovery media with the drivers of the computers chosen", async () => {
+    mockLists(scheduledStatus());
+    axiosMock.onGet("/api/v1/images/drivers").reply(200, {
+      hosts: [
+        { host: "LAPTOP", imageTime: "2026-11-15T00:00:00Z", drivers: [{ class: "Net", inf: "a.inf", version: "1" }] },
+        { host: "nas", imageTime: "2026-11-15T00:00:00Z", drivers: [{ class: "Net", inf: "b.inf", version: "1" }] },
+        // this computer gets its drivers from its driver store
+        { host: "PC", imageTime: "2026-11-16T00:00:00Z", drivers: [{ class: "Net", inf: "c.inf", version: "1" }] },
+      ],
+    });
+    window.kopiaUI = { createRecoveryMediaElevated: vi.fn().mockResolvedValue("started") };
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("create-recovery-media")).toBeEnabled());
+    await userEvent.click(screen.getByTestId("create-recovery-media"));
+
+    await waitFor(() => expect(screen.getByTestId("media-driver-hosts")).toBeInTheDocument());
+    expect(screen.getByLabelText(/LAPTOP/)).toBeChecked();
+    expect(screen.getByLabelText(/nas/)).toBeChecked();
+    expect(screen.queryByLabelText(/^PC/)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText(/nas/));
+    expect(screen.getByLabelText(/nas/)).not.toBeChecked();
+
+    await userEvent.click(screen.getByTestId("build-recovery-media"));
+
+    await waitFor(() => expect(screen.getByText(/It adds the drivers of LAPTOP/)).toBeInTheDocument());
+    expect(window.kopiaUI.createRecoveryMediaElevated).toHaveBeenCalledWith(["LAPTOP"]);
+    expect(screen.queryByTestId("media-driver-hosts")).not.toBeInTheDocument();
+  });
+
+  test("keeps the recovery media dialog open when the prompt is declined", async () => {
+    mockLists(scheduledStatus());
+    axiosMock.onGet("/api/v1/images/drivers").reply(200, { hosts: [] });
+    window.kopiaUI = { createRecoveryMediaElevated: vi.fn().mockResolvedValue("canceled") };
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("create-recovery-media")).toBeEnabled());
+    await userEvent.click(screen.getByTestId("create-recovery-media"));
+    await waitFor(() => expect(screen.getByTestId("build-recovery-media")).toBeEnabled());
+    await userEvent.click(screen.getByTestId("build-recovery-media"));
+
+    await waitFor(() => expect(screen.getByText(/no media was built/)).toBeInTheDocument());
+    expect(screen.getByTestId("build-recovery-media")).toBeInTheDocument();
   });
 
   test("in a browser, tells how to build recovery media", async () => {

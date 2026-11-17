@@ -9,6 +9,7 @@ import Button from "react-bootstrap/Button";
 import Card from "react-bootstrap/Card";
 import Col from "react-bootstrap/Col";
 import Form from "react-bootstrap/Form";
+import Modal from "react-bootstrap/Modal";
 import ProgressBar from "react-bootstrap/ProgressBar";
 import Row from "react-bootstrap/Row";
 import Spinner from "react-bootstrap/Spinner";
@@ -720,6 +721,120 @@ function DriverInventory({ mediaDrivers }) {
   );
 }
 
+/** Tells whether two computer names are the same, as kopia compares them. */
+function sameHost(a, b) {
+  return a.toLowerCase() === b.toLowerCase();
+}
+
+/**
+ * Asks whose drivers to add to recovery media before building it: the media
+ * restores this computer with its own drivers, and the other computers whose
+ * images store drivers, when chosen, with theirs. onBuild receives the chosen
+ * computers and returns a promise of the message to show.
+ */
+export function RecoveryMediaDialog({ show, onHide, localHost, onBuild }) {
+  const [inventory, setInventory] = useState(null);
+  const [chosen, setChosen] = useState(null);
+  const [message, setMessage] = useState(null);
+  const [building, setBuilding] = useState(false);
+
+  useEffect(() => {
+    axios
+      .get("/api/v1/images/drivers")
+      .then((result) => setInventory(result.data.hosts || []))
+      .catch(() => setInventory([]));
+  }, []);
+
+  const others = (inventory || []).filter((h) => !sameHost(h.host, localHost || ""));
+
+  // every other computer at first
+  const selected = chosen ?? others.map((h) => h.host);
+
+  const toggle = (host, on) => setChosen(on ? [...selected, host] : selected.filter((h) => !sameHost(h, host)));
+
+  const build = () => {
+    setBuilding(true);
+    setMessage(null);
+
+    onBuild(selected)
+      .then((m) => {
+        if (m.variant !== "success") {
+          setMessage(m);
+        }
+      })
+      .catch((e) => setMessage({ variant: "danger", text: e.message }))
+      .finally(() => setBuilding(false));
+  };
+
+  return (
+    <Modal show={show} onHide={onHide}>
+      <Modal.Header closeButton>
+        <Modal.Title>Create Recovery Media</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        {message && <Alert variant={message.variant}>{message.text}</Alert>}
+        {inventory === null ? (
+          <p>
+            <Spinner size="sm" animation="border" /> Loading the drivers of the computers ...
+          </p>
+        ) : (
+          <>
+            <p>
+              The media restores {localHost || "this computer"} with its own storage, network and USB drivers.
+              {others.length > 0 && " To restore other computers with it too, add their drivers:"}
+            </p>
+            {others.length > 0 ? (
+              <Form.Group className="mb-3" data-testid="media-driver-hosts">
+                {others.map((h) => (
+                  <Form.Check
+                    key={h.host}
+                    type="checkbox"
+                    id={"media-drivers-" + h.host}
+                    checked={selected.some((s) => sameHost(s, h.host))}
+                    onChange={(e) => toggle(h.host, e.target.checked)}
+                    label={
+                      <span title={h.drivers.map((d) => d.class + " " + d.inf + " " + d.version).join("\n")}>
+                        {h.host}{" "}
+                        <span className="text-muted small">
+                          {h.drivers.length} {h.drivers.length === 1 ? "driver" : "drivers"}, image of{" "}
+                          {moment(h.imageTime).fromNow()}
+                        </span>
+                      </span>
+                    }
+                  />
+                ))}
+              </Form.Group>
+            ) : (
+              <p className="text-muted small" data-testid="media-no-driver-hosts">
+                No image of another computer stores drivers yet: computers store them with every image they create with
+                this version of kopia.
+              </p>
+            )}
+          </>
+        )}
+        <p className="text-muted small mb-0">
+          The media is built in a console window, which asks which USB disk to erase.
+        </p>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button size="sm" variant="secondary" onClick={onHide}>
+          Cancel
+        </Button>
+        <Button
+          size="sm"
+          variant="primary"
+          data-testid="build-recovery-media"
+          disabled={building || inventory === null}
+          onClick={build}
+          title="Asks for administrator rights"
+        >
+          {building && <Spinner size="sm" animation="border" />} Build Media
+        </Button>
+      </Modal.Footer>
+    </Modal>
+  );
+}
+
 /**
  * Lists the disk images in the repository and, on Windows, the scheduled
  * image tasks, the last image run and the recovery media of the computer the
@@ -735,6 +850,7 @@ export function Images() {
   const [message, setMessage] = useState(null);
   const [editing, setEditing] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [creatingMedia, setCreatingMedia] = useState(false);
   const lastRunEndRef = useRef(undefined);
 
   const fetchImages = useCallback(() => {
@@ -861,19 +977,31 @@ export function Images() {
       resume ? "Unable to resume the schedule" : "Unable to pause the schedule",
     );
 
-  const onCreateRecoveryMedia = () =>
-    act(
-      () =>
-        window.kopiaUI.createRecoveryMediaElevated().then((result) =>
-          result === "canceled"
-            ? { variant: "warning", text: "The administrator prompt was declined, so no media was built." }
-            : {
-                variant: "success",
-                text: "Building recovery media in a console window: it asks which USB disk to erase. The result shows here when it ends.",
-              },
-        ),
-      "Unable to start building recovery media",
-    );
+  const onCreateRecoveryMedia = () => setCreatingMedia(true);
+
+  const buildRecoveryMedia = (driverHosts) =>
+    window.kopiaUI
+      .createRecoveryMediaElevated(driverHosts)
+      .then((result) =>
+        result === "canceled"
+          ? { variant: "warning", text: "The administrator prompt was declined, so no media was built." }
+          : {
+              variant: "success",
+              text:
+                "Building recovery media in a console window: it asks which USB disk to erase." +
+                (driverHosts.length > 0 ? " It adds the drivers of " + driverHosts.join(", ") + "." : "") +
+                " The result shows here when it ends.",
+            },
+      )
+      .then((m) => {
+        if (m.variant === "success") {
+          setCreatingMedia(false);
+          setMessage(m);
+          fetchStatus();
+        }
+
+        return m;
+      });
 
   const onRemove = () => {
     if (!window.confirm("Remove the scheduled image tasks? Images already created stay in the repository.")) {
@@ -944,6 +1072,14 @@ export function Images() {
           initial={settingsFromSchedule(status.schedule)}
           onHide={() => setEditing(false)}
           onSaved={onSaved}
+        />
+      )}
+      {creatingMedia && (
+        <RecoveryMediaDialog
+          show={creatingMedia}
+          onHide={() => setCreatingMedia(false)}
+          localHost={images.localHost}
+          onBuild={buildRecoveryMedia}
         />
       )}
       {creating && (
