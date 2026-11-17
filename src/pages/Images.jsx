@@ -9,6 +9,7 @@ import Button from "react-bootstrap/Button";
 import Card from "react-bootstrap/Card";
 import Col from "react-bootstrap/Col";
 import Form from "react-bootstrap/Form";
+import ProgressBar from "react-bootstrap/ProgressBar";
 import Row from "react-bootstrap/Row";
 import Spinner from "react-bootstrap/Spinner";
 import Table from "react-bootstrap/Table";
@@ -60,43 +61,6 @@ export function diskDisplayName(source) {
   }
 
   return source.path;
-}
-
-/**
- * Starts the scheduled image task. When the server may not start it, KopiaUI
- * can run it as administrator after the UAC prompt; elsewhere the person is
- * told how to start it.
- *
- * @returns {Promise<{variant: string, text: string}>} the message to show
- */
-export async function runImageTask() {
-  const started = {
-    variant: "success",
-    text: "Started the image task. It runs in the background; its result shows here when it ends.",
-  };
-
-  try {
-    await axios.post("/api/v1/images/schedule/run", {});
-    return started;
-  } catch (e) {
-    if (e.response?.data?.code !== "ACCESS_DENIED") {
-      throw e;
-    }
-  }
-
-  if (!window.kopiaUI?.runImageTaskElevated) {
-    return {
-      variant: "warning",
-      text: "Starting the image task needs administrator rights. Run 'kopia image schedule run' in an administrator command prompt.",
-    };
-  }
-
-  const status = await window.kopiaUI.runImageTaskElevated();
-  if (status === "canceled") {
-    return { variant: "warning", text: "The administrator prompt was declined, so the image task did not start." };
-  }
-
-  return started;
 }
 
 function errorText(e) {
@@ -162,9 +126,13 @@ function LastRun({ status, bytesStringBase2 }) {
   return (
     <>
       <p>
-        {run.success ? (
-          <Badge bg="success">Succeeded</Badge>
-        ) : (
+        {run.success && <Badge bg="success">Succeeded</Badge>}
+        {run.stopped && (
+          <Badge bg="secondary" data-testid="last-run-stopped">
+            Stopped
+          </Badge>
+        )}
+        {!run.success && !run.stopped && (
           <Badge bg="danger" data-testid="last-run-failed">
             Failed
           </Badge>
@@ -172,8 +140,9 @@ function LastRun({ status, bytesStringBase2 }) {
         Imaged {(run.volumes || []).join(" ")}{" "}
         <span title={moment(run.startTime).toLocaleString()}>{moment(run.startTime).fromNow()}</span>, took{" "}
         {formatDuration(run.startTime, run.endTime, true)}.
+        {run.stopped && " It was stopped; what it uploaded is reused by the next image."}
       </p>
-      {run.error && <Alert variant="danger">{run.error}</Alert>}
+      {run.error && !run.stopped && <Alert variant="danger">{run.error}</Alert>}
       {(run.images || []).length > 0 && (
         <ul>
           {run.images.map((img) => (
@@ -322,6 +291,99 @@ function ScheduleSettings({ status, busy, onUpdate }) {
   );
 }
 
+/**
+ * Returns how far an image run got, from 0 to 1, over all its disks: each
+ * disk counts equally, and within a disk the bytes of its volumes.
+ */
+export function progressFraction(p) {
+  const disks = Math.max(p.disks || 1, 1);
+  const disk = Math.min(Math.max(p.disk || 1, 1), disks);
+  const within = p.bytesTotal > 0 ? Math.min(p.bytesDone / p.bytesTotal, 1) : 0;
+
+  return (disk - 1 + within) / disks;
+}
+
+/**
+ * Shows the image run in progress, with the button that stops it.
+ */
+function RunProgress({ progress, bytesStringBase2, busy, onStop }) {
+  const fraction = progressFraction(progress);
+  const percent = Math.floor(fraction * 100);
+  // measured when the counts were written, not when the page renders
+  const elapsedMillis = new Date(progress.updatedAt).valueOf() - new Date(progress.startTime).valueOf();
+  const remaining =
+    fraction > 0.02 && elapsedMillis > 0
+      ? moment.duration((elapsedMillis * (1 - fraction)) / fraction).humanize()
+      : null;
+  const canStop = !!window.kopiaUI?.stopImageElevated;
+
+  return (
+    <Alert variant="info" data-testid="image-progress">
+      <Row className="align-items-center mb-2">
+        <Col>
+          <strong>Creating an image</strong> of the disks holding {(progress.volumes || []).join(" ")}
+          {progress.disks > 1 && ", disk " + progress.disk + " of " + progress.disks}
+          {progress.partition > 0 && (
+            <>
+              : partition {progress.partition} of {progress.partitions}
+              {progress.partitionName ? " (" + progress.partitionName + ")" : ""}
+            </>
+          )}
+        </Col>
+        <Col xs="auto">
+          {canStop ? (
+            <Button
+              size="sm"
+              variant="danger"
+              data-testid="stop-image"
+              disabled={busy || progress.stopping}
+              onClick={onStop}
+              title="Asks for administrator rights; what was uploaded is kept"
+            >
+              {progress.stopping ? "Stopping..." : "Stop"}
+            </Button>
+          ) : (
+            <span className="small">
+              Stop it with <code>kopia image stop</code> in an administrator command prompt.
+            </span>
+          )}
+        </Col>
+      </Row>
+      <ProgressBar now={percent} label={percent + "%"} animated={!progress.stopping} data-testid="image-progress-bar" />
+      <div className="small mt-2" data-testid="image-progress-details">
+        {sizeDisplayName(progress.bytesDone, bytesStringBase2)} of{" "}
+        {sizeDisplayName(progress.bytesTotal, bytesStringBase2)} of this disk done,{" "}
+        {sizeDisplayName(progress.uploadedBytes || 0, bytesStringBase2)} uploaded; started{" "}
+        {moment(progress.startTime).fromNow()}
+        {remaining && !progress.stopping && ", about " + remaining + " left"}.
+      </div>
+    </Alert>
+  );
+}
+
+/**
+ * Tells when an image started from this page did not start, which happens
+ * before it writes any progress: there is no window to show it.
+ */
+function FailedStart({ status }) {
+  const req = status.lastRequest;
+  if (!req || req.success || req.operation !== "create") {
+    return null;
+  }
+
+  // a later run replaced it
+  if (status.lastRun && new Date(status.lastRun.startTime) > new Date(req.time)) {
+    return null;
+  }
+
+  return (
+    <Alert variant="danger" data-testid="image-failed-start">
+      The image started <span title={moment(req.time).toLocaleString()}>{moment(req.time).fromNow()}</span> did not run:{" "}
+      {req.error}
+    </Alert>
+  );
+}
+
 function ImageStatus({
   status,
   bytesStringBase2,
@@ -331,6 +393,7 @@ function ImageStatus({
   onPause,
   onUpdate,
   onCreateRecoveryMedia,
+  onStop,
   busy,
   message,
 }) {
@@ -359,13 +422,9 @@ function ImageStatus({
               size="sm"
               variant="primary"
               data-testid="run-image-task"
-              disabled={taskRunning || busy}
+              disabled={taskRunning || busy || !!status.progress}
               onClick={onRun}
-              title={
-                scheduled
-                  ? "Create images of this computer's disks now, with the scheduled task's settings"
-                  : "Create images of this computer's disks now; asks for administrator rights"
-              }
+              title="Create images of this computer's disks now, with or without a schedule; asks for administrator rights"
             >
               {busy || taskRunning ? <Spinner size="sm" animation="border" /> : null} Create Image Now
             </Button>
@@ -392,6 +451,10 @@ function ImageStatus({
           </Col>
         </Row>
         {message && <Alert variant={message.variant}>{message.text}</Alert>}
+        <FailedStart status={status} />
+        {status.progress && (
+          <RunProgress progress={status.progress} bytesStringBase2={bytesStringBase2} busy={busy} onStop={onStop} />
+        )}
         {!scheduled && !createTask?.error && (
           <Alert variant="info">
             <FontAwesomeIcon icon={faInfoCircle} /> Images are not scheduled on this computer. Create one now, or set up
@@ -562,22 +625,20 @@ export function Images() {
 
   const onRun = () => setCreating(true);
 
-  // the scheduled disks run the scheduled task; other disks, or no schedule,
-  // run kopia image create in a console window
-  const startImage = (volumes, usesSchedule) => {
-    const started = usesSchedule
-      ? runImageTask()
-      : window.kopiaUI.createImageElevated(volumes).then((result) =>
-          result === "canceled"
-            ? { variant: "warning", text: "The administrator prompt was declined, so no image was created." }
-            : {
-                variant: "success",
-                text:
-                  "Creating images of the disks holding " +
-                  volumes.join(" ") +
-                  " in a console window, which shows the progress; closing it stops the run. The result shows here when it ends.",
-              },
-        );
+  // an image now never depends on the schedule: kopia image create runs in a
+  // console window, whether images are scheduled, paused or not at all
+  const startImage = (volumes) => {
+    const started = window.kopiaUI.createImageElevated(volumes).then((result) =>
+      result === "canceled"
+        ? { variant: "warning", text: "The administrator prompt was declined, so no image was created." }
+        : {
+            variant: "success",
+            text:
+              "Creating images of the disks holding " +
+              volumes.join(" ") +
+              " in a console window, which shows the progress; closing it stops the run. The result shows here when it ends.",
+          },
+    );
 
     return started.then((m) => {
       if (m.variant === "success") {
@@ -590,10 +651,27 @@ export function Images() {
     });
   };
 
-  // the schedule's disks, when the tasks are installed, not paused, and their
-  // settings known: a paused task cannot be started
-  const scheduledVolumes =
-    status?.tasks[0]?.scheduled && !status?.schedule?.paused ? status?.schedule?.volumes : undefined;
+  // the schedule's disks, chosen at first in Create Image Now
+  const scheduledVolumes = status?.schedule?.volumes;
+
+  const onStop = () => {
+    if (!window.confirm("Stop creating the image? What it uploaded so far is kept and reused by the next image.")) {
+      return;
+    }
+
+    act(
+      () =>
+        window.kopiaUI.stopImageElevated().then((result) =>
+          result === "canceled"
+            ? { variant: "warning", text: "The administrator prompt was declined, so the image goes on." }
+            : {
+                variant: "info",
+                text: "The image is stopping: it saves what it uploaded and removes its shadow copy.",
+              },
+        ),
+      "Unable to stop the image",
+    );
+  };
 
   const onPause = (resume) =>
     act(
@@ -689,6 +767,7 @@ export function Images() {
         onPause={onPause}
         onUpdate={onUpdate}
         onCreateRecoveryMedia={onCreateRecoveryMedia}
+        onStop={onStop}
         busy={running}
         message={message}
       />

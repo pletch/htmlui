@@ -330,21 +330,13 @@ ImageScheduleForm.propTypes = {
 };
 
 /**
- * Reports whether two volume lists name the same drive letters.
- */
-export function sameVolumes(a, b) {
-  return a.length === b.length && a.every((v) => b.includes(v));
-}
-
-/**
- * Creates images now. The disks of the schedule, if any, are chosen at
- * first: leaving them so runs the scheduled task, in the background as
- * SYSTEM. Other disks, or no schedule, run kopia image create in a console
- * window as administrator, after the UAC prompt; in a browser the dialog
- * shows the command to run instead.
+ * Creates images now, whether or not images are scheduled: in KopiaUI, after
+ * the UAC prompt, kopia image create runs in a console window that shows its
+ * progress; in a browser the dialog shows the command to run instead. The
+ * disks of the schedule, if any, are chosen at first, else the Windows disk.
  *
- * onStart(volumes, usesSchedule) returns a promise of the message to show:
- * a success closes the dialog, anything else stays in it.
+ * onStart(volumes) returns a promise of the message to show: a success
+ * closes the dialog, anything else stays in it.
  */
 export function CreateImageDialog({ show, onHide, scheduledVolumes, onStart }) {
   const { disks, error: disksError } = useLocalDisks();
@@ -353,14 +345,13 @@ export function CreateImageDialog({ show, onHide, scheduledVolumes, onStart }) {
   const [starting, setStarting] = useState(false);
 
   const volumes = chosenVolumes ?? systemVolumes(disks);
-  const usesSchedule = !!scheduledVolumes?.length && sameVolumes(volumes, scheduledVolumes);
-  const canStart = usesSchedule || !!window.kopiaUI?.createImageElevated;
+  const canStart = !!window.kopiaUI?.createImageElevated;
 
   const start = () => {
     setStarting(true);
     setMessage(null);
 
-    onStart(volumes, usesSchedule)
+    onStart(volumes)
       .then((m) => {
         if (m.variant !== "success") {
           setMessage(m);
@@ -383,9 +374,8 @@ export function CreateImageDialog({ show, onHide, scheduledVolumes, onStart }) {
           <DiskChecks disks={disks} volumes={volumes} onChange={setChosenVolumes} />
         </Form.Group>
         <p className="text-muted small mb-0" data-testid="create-image-how">
-          {usesSchedule
-            ? "These are the scheduled disks: the scheduled task images them in the background, and goes on when you sign out."
-            : "The image is created in a console window, which shows its progress, while you are signed in."}
+          The image is created now, in a console window that shows its progress; closing the window or signing out stops
+          it. A schedule, if any, is not affected.
         </p>
         {!canStart && (
           <Alert variant="info" className="mt-3">
