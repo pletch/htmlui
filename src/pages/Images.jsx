@@ -67,13 +67,56 @@ function errorText(e) {
   return e.response?.data?.error || e.message || String(e);
 }
 
+/**
+ * Returns the Badge colour for a Task Scheduler last result: green for
+ * success, red for a failure code, grey for results that are not failures.
+ */
+export function taskResultVariant(r) {
+  if (r === undefined || r === "") {
+    return null;
+  }
+  if (String(r) === "0") {
+    return "success";
+  }
+  if (String(r) === "267009") {
+    return "primary";
+  }
+  if (taskResults[r]) {
+    return "secondary";
+  }
+  return "danger";
+}
+
+/** Returns the Badge colour for a Task Scheduler status such as Ready or Running. */
+export function taskStateVariant(status) {
+  switch (status) {
+    case "Running":
+      return "primary";
+    case "Disabled":
+      return "warning";
+    default:
+      return "secondary";
+  }
+}
+
+/** Shows a scheduled task as its short name with the full Task Scheduler path under it. */
+function TaskNameCell({ name }) {
+  const short = name.substring(name.lastIndexOf("\\") + 1);
+  return (
+    <td className="col-source">
+      <span className="source-name">{short}</span>
+      <span className="source-path">{name}</span>
+    </td>
+  );
+}
+
 function TaskRow({ task }) {
   if (task.error) {
     return (
       <tr>
-        <td>{task.name}</td>
-        <td colSpan={4} className="text-danger">
-          {task.error}
+        <TaskNameCell name={task.name} />
+        <td colSpan={4}>
+          <Badge bg="danger">error</Badge> <span className="text-danger">{task.error}</span>
         </td>
       </tr>
     );
@@ -82,8 +125,10 @@ function TaskRow({ task }) {
   if (!task.scheduled) {
     return (
       <tr>
-        <td>{task.name}</td>
-        <td colSpan={4}>Not scheduled</td>
+        <TaskNameCell name={task.name} />
+        <td colSpan={4}>
+          <Badge bg="secondary">not scheduled</Badge>
+        </td>
       </tr>
     );
   }
@@ -91,24 +136,29 @@ function TaskRow({ task }) {
   if (task.statusHidden) {
     return (
       <tr>
-        <td>{task.name}</td>
+        <TaskNameCell name={task.name} />
         <td colSpan={4} data-testid="task-status-hidden">
-          Scheduled{" "}
+          <Badge bg="secondary">scheduled</Badge>{" "}
           <span className="text-muted">
-            (Task Scheduler shows the status of tasks that run as SYSTEM only to administrators)
+            Task Scheduler shows the status of tasks that run as SYSTEM only to administrators.
           </span>
         </td>
       </tr>
     );
   }
 
+  const result = taskResultDisplayName(task.lastResult);
+  const resultVariant = taskResultVariant(task.lastResult);
   return (
     <tr>
-      <td>{task.name}</td>
-      <td>{task.status}</td>
-      <td>{task.nextRunTime}</td>
-      <td>{task.lastRunTime}</td>
-      <td>{taskResultDisplayName(task.lastResult)}</td>
+      <TaskNameCell name={task.name} />
+      <td className="col-time">{task.status && <Badge bg={taskStateVariant(task.status)}>{task.status}</Badge>}</td>
+      <td className="col-time">{task.nextRunTime}</td>
+      <td className="col-time">
+        {/* Task Scheduler reports a placeholder date (11/30/1999) for tasks that have not run. */}
+        {String(task.lastResult) === "267011" ? <span className="text-muted">never</span> : task.lastRunTime}
+      </td>
+      <td className="col-time">{resultVariant ? <Badge bg={resultVariant}>{result}</Badge> : result}</td>
     </tr>
   );
 }

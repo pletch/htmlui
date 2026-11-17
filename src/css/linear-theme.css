@@ -649,12 +649,12 @@ html.linear #kopia .table > tbody > tr > td {
   padding-bottom: 0.55rem;
 }
 
-html.linear #kopia .source-link .source-name {
+html.linear #kopia .source-name {
   color: var(--linear-text);
   font-weight: 500;
 }
 
-html.linear #kopia .source-link .source-path {
+html.linear #kopia .source-path {
   color: var(--linear-muted);
 }
 

@@ -680,20 +680,20 @@ div.tab-body {
   text-decoration: none;
 }
 
-#kopia .source-link .source-name {
+#kopia .source-name {
   display: block;
   font-weight: 600;
   color: var(--color-text-body);
 }
 
-#kopia .source-link .source-path,
-#kopia .source-link .source-owner {
+#kopia .source-path,
+#kopia .source-owner {
   display: block;
   font-size: 85%;
   overflow-wrap: anywhere;
 }
 
-#kopia .source-link .source-owner {
+#kopia .source-owner {
   color: var(--color-text-form-help);
 }
 
@@ -737,4 +737,18 @@ div.tab-body {
   padding: 0 2px;
   margin: 0;
   line-height: 1;
+}
+
+/* Directory browser: a muted folder or file icon before each name. */
+.dir-entry {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.dir-entry-icon {
+  flex: none;
+  width: 1em;
+  color: var(--color-text-form-help);
 }

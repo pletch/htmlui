@@ -1,5 +1,7 @@
 import React from "react";
 import { Link } from "react-router";
+import { faFile, faFolder } from "@fortawesome/free-regular-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import KopiaTable from "./KopiaTable";
 import { objectLink, rfc3339TimestampForDisplay } from "../utils/formatutils";
 import { sizeWithFailures } from "../utils/uiutil";
@@ -46,34 +48,46 @@ export function DirectoryItems({ historyState, items }) {
     {
       id: "name",
       header: "Name",
-      width: "",
-      cell: (x) => directoryLinkOrDownload(x.row.original, historyState),
+      // directories sort before files
+      accessorFn: (x) => (x.type === "d" ? "0" : "1") + x.name,
+      meta: { className: "col-source" },
+      cell: (x) => (
+        <span className="dir-entry">
+          <FontAwesomeIcon
+            className="dir-entry-icon"
+            icon={x.row.original.type === "d" ? faFolder : faFile}
+            data-testid={x.row.original.type === "d" ? "dir-icon" : "file-icon"}
+          />
+          {directoryLinkOrDownload(x.row.original, historyState)}
+        </span>
+      ),
     },
     {
       id: "mtime",
       accessorFn: (x) => x.mtime,
-      header: "Last Modification",
-      width: 200,
+      header: "Modified",
+      meta: { className: "col-num" },
       cell: (x) => rfc3339TimestampForDisplay(x.cell.getValue()),
     },
     {
       id: "size",
       accessorFn: (x) => sizeInfo(x),
       header: "Size",
-      width: 100,
+      meta: { className: "col-num" },
       cell: (x) => sizeWithFailures(x.cell.getValue(), x.row.original.summ, bytesStringBase2),
     },
     {
       id: "files",
       accessorFn: (x) => (x.summ ? x.summ.files : undefined),
-      header: "Files",
-      width: 100,
-    },
-    {
-      id: "dirs",
-      accessorFn: (x) => (x.summ ? x.summ.dirs : undefined),
-      header: "Directories",
-      width: 100,
+      header: "Files / Dirs",
+      meta: { className: "col-num col-time" },
+      cell: (x) =>
+        x.row.original.summ ? (
+          <>
+            <span className="time-last">{(x.row.original.summ.files ?? 0).toLocaleString()}</span>
+            <span className="time-next">{(x.row.original.summ.dirs ?? 0).toLocaleString()} dirs</span>
+          </>
+        ) : null,
     },
   ];
 
