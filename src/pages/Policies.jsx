@@ -13,7 +13,7 @@ import { handleChange } from "../forms";
 import { OptionalDirectory } from "../forms/OptionalDirectory";
 import KopiaTable from "../components/KopiaTable";
 import { CLIEquivalent } from "../components/CLIEquivalent";
-import { compare, formatOwnerName } from "../utils/formatutils";
+import { baseName, compare, formatOwnerName } from "../utils/formatutils";
 import { redirect } from "../utils/uiutil";
 import { checkPolicyPath, policyEditorURL } from "../utils/policyutil";
 import PropTypes from "prop-types";
@@ -24,6 +24,63 @@ const allPolicies = "All Policies";
 const globalPolicy = "Global Policy";
 const perUserPolicies = "Per-User Policies";
 const perHostPolicies = "Per-Host Policies";
+
+/**
+ * Classifies a policy target. rank orders the scopes from the widest to the narrowest.
+ * @param {object} target - the policy target ({userName, host, path})
+ * @returns {{rank: number, label: string}}
+ */
+export function policyScope(target) {
+  if (target.path) {
+    return { rank: 3, label: "Folder" };
+  }
+  if (target.userName) {
+    return { rank: 2, label: "User" };
+  }
+  if (target.host) {
+    return { rank: 1, label: "Host" };
+  }
+  return { rank: 0, label: "Global" };
+}
+
+/**
+ * Shows what a policy applies to: a name, and under it what that covers
+ * (or the full path and, when several are listed, the owner of a folder policy).
+ */
+function policyTargetCell(target, showOwner) {
+  let name;
+  let detail;
+  switch (policyScope(target).rank) {
+    case 0:
+      name = "Global policy";
+      detail = "Every user, host and folder";
+      break;
+    case 1:
+      name = target.host;
+      detail = "Every user on this host";
+      break;
+    case 2:
+      name = formatOwnerName(target);
+      detail = "Every folder of this user";
+      break;
+    default:
+      name = baseName(target.path);
+      detail = target.path;
+      break;
+  }
+
+  return (
+    <Link
+      className="source-link"
+      to={policyEditorURL(target)}
+      title={formatOwnerName(target) + ":" + (target.path || "")}
+    >
+      {name && <span className="source-name">{name}</span>}
+      <span className="source-path">{detail}</span>
+      {showOwner && target.path && <span className="source-owner">{formatOwnerName(target)}</span>}
+    </Link>
+  );
+}
 
 export class PoliciesInternal extends Component {
   constructor() {
@@ -251,29 +308,35 @@ export class PoliciesInternal extends Component {
       return compare(l.target.path, r.target.path);
     });
 
+    // The owner only tells folder policies apart when more than one owner is listed.
+    const showOwner = new Set(policies.filter((x) => x.target.path).map((x) => formatOwnerName(x.target))).size > 1;
+
     const columns = [
       {
-        header: "Username",
-        width: 100,
-        accessorFn: (x) => x.target.userName || "*",
+        id: "target",
+        header: "Applies To",
+        meta: { className: "col-source" },
+        accessorFn: (x) => policyScope(x.target).rank + ":" + formatOwnerName(x.target) + ":" + (x.target.path || ""),
+        cell: (x) => policyTargetCell(x.row.original.target, showOwner),
       },
       {
-        header: "Host",
-        width: 100,
-        accessorFn: (x) => x.target.host || "*",
+        id: "scope",
+        header: "Scope",
+        meta: { className: "col-time" },
+        accessorFn: (x) => policyScope(x.target).rank,
+        cell: (x) => <Badge bg="secondary">{policyScope(x.row.original.target).label}</Badge>,
       },
       {
-        header: "Path",
-        accessorFn: (x) => x.target.path || "*",
-      },
-      {
+        id: "defined",
         header: "Defined",
-        cell: (x) => this.policySummary(x.row.original),
+        enableSorting: false,
+        cell: (x) => <div className="policy-defined">{this.policySummary(x.row.original)}</div>,
       },
       {
         id: "edit",
-        header: "Actions",
-        width: 50,
+        header: "",
+        enableSorting: false,
+        meta: { className: "col-actions" },
         cell: (x) => (
           <Button
             data-testid="edit-policy"

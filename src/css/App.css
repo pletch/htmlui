@@ -618,7 +618,19 @@ div.tab-body {
   min-width: 12em;
 }
 
-/* A source: folder name, full path and owner on separate lines. */
+/* Policies table: what each policy defines. */
+.policy-defined {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+#kopia .policy-defined .badge {
+  margin: 0;
+}
+
+/* A snapshot source or policy target: name, full path (or what the target
+   covers) and owner on separate lines. */
 #kopia .source-link {
   display: block;
   text-decoration: none;
