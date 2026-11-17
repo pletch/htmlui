@@ -3,7 +3,7 @@ import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
-import { Images, diskDisplayName, taskResultDisplayName } from "../../src/pages/Images";
+import { Images, diskDisplayName, progressFraction, taskResultDisplayName } from "../../src/pages/Images";
 import { UIPreferencesContext } from "../../src/contexts/UIPreferencesContext";
 import { setupAPIMock } from "../testutils/api-mocks";
 
@@ -84,15 +84,6 @@ function scheduledStatus(overrides = {}) {
     kopiaVersion: "v0.1.0",
     ...overrides,
   };
-}
-
-// Create Image Now with the scheduled disks, which runs the scheduled task
-async function startScheduledImage() {
-  mockDisks();
-  await userEvent.click(screen.getByTestId("run-image-task"));
-  await waitFor(() => expect(screen.getByLabelText(/Disk 3 - NVMe/)).toBeChecked());
-  expect(screen.getByTestId("create-image-how")).toHaveTextContent("scheduled task");
-  await userEvent.click(screen.getByTestId("start-image"));
 }
 
 function mockDisks() {
@@ -405,67 +396,6 @@ describe("Images page", () => {
     expect(screen.getByText("p3-C.img")).toBeInTheDocument();
   });
 
-  test("starts the image task", async () => {
-    mockLists(scheduledStatus());
-    axiosMock.onPost("/api/v1/images/schedule/run").reply(200, { task: createTask });
-    renderImages();
-
-    await waitFor(() => expect(screen.getByTestId("run-image-task")).toBeEnabled());
-    await startScheduledImage();
-
-    await waitFor(() => expect(screen.getByText(/Started the image task/)).toBeInTheDocument());
-    expect(axiosMock.history.post).toHaveLength(1);
-  });
-
-  test("asks KopiaUI for administrator rights when the server is denied", async () => {
-    mockLists(scheduledStatus());
-    axiosMock.onPost("/api/v1/images/schedule/run").reply(403, { code: "ACCESS_DENIED", error: "needs admin" });
-    window.kopiaUI = { runImageTaskElevated: vi.fn().mockResolvedValue("started") };
-    renderImages();
-
-    await waitFor(() => expect(screen.getByTestId("run-image-task")).toBeEnabled());
-    await startScheduledImage();
-
-    await waitFor(() => expect(screen.getByText(/Started the image task/)).toBeInTheDocument());
-    expect(window.kopiaUI.runImageTaskElevated).toHaveBeenCalledTimes(1);
-  });
-
-  test("reports a declined administrator prompt", async () => {
-    mockLists(scheduledStatus());
-    axiosMock.onPost("/api/v1/images/schedule/run").reply(403, { code: "ACCESS_DENIED", error: "needs admin" });
-    window.kopiaUI = { runImageTaskElevated: vi.fn().mockResolvedValue("canceled") };
-    renderImages();
-
-    await waitFor(() => expect(screen.getByTestId("run-image-task")).toBeEnabled());
-    await startScheduledImage();
-
-    await waitFor(() => expect(screen.getByText(/administrator prompt was declined/)).toBeInTheDocument());
-  });
-
-  test("in a browser, tells how to start the task as administrator", async () => {
-    mockLists(scheduledStatus());
-    axiosMock.onPost("/api/v1/images/schedule/run").reply(403, { code: "ACCESS_DENIED", error: "needs admin" });
-    renderImages();
-
-    await waitFor(() => expect(screen.getByTestId("run-image-task")).toBeEnabled());
-    await startScheduledImage();
-
-    await waitFor(() => expect(screen.getByText(/needs administrator rights/)).toBeInTheDocument());
-  });
-
-  test("reports other errors starting the task", async () => {
-    mockLists(scheduledStatus());
-    axiosMock
-      .onPost("/api/v1/images/schedule/run")
-      .reply(404, { code: "NOT_FOUND", error: "the image task is not scheduled" });
-    renderImages();
-
-    await waitFor(() => expect(screen.getByTestId("run-image-task")).toBeEnabled());
-    await startScheduledImage();
-
-    await waitFor(() => expect(screen.getByText(/the image task is not scheduled/)).toBeInTheDocument());
-  });
-
   test("lists the images of every computer", async () => {
     mockLists(scheduledStatus());
     axiosMock
@@ -487,17 +417,10 @@ describe("Images page", () => {
       { name: checkTask, scheduled: true, statusHidden: true },
     ];
     mockLists(st);
-    axiosMock.onPost("/api/v1/images/schedule/run").reply(403, { code: "ACCESS_DENIED", error: "needs admin" });
-    window.kopiaUI = { runImageTaskElevated: vi.fn().mockResolvedValue("started") };
     renderImages();
 
     await waitFor(() => expect(screen.getAllByTestId("task-status-hidden")).toHaveLength(2));
     expect(screen.getByTestId("schedule-summary")).toBeInTheDocument();
-
-    // the task starts as administrator
-    await startScheduledImage();
-    await waitFor(() => expect(screen.getByText(/Started the image task/)).toBeInTheDocument());
-    expect(window.kopiaUI.runImageTaskElevated).toHaveBeenCalledTimes(1);
   });
 
   test("creates an image without a schedule in KopiaUI", async () => {
@@ -526,7 +449,7 @@ describe("Images page", () => {
     expect(axiosMock.history.post).toHaveLength(0);
   });
 
-  test("asks which disks to image even with a schedule", async () => {
+  test("creates an image now with a schedule, without its task", async () => {
     mockLists(scheduledStatus());
     mockDisks();
     window.kopiaUI = {
@@ -538,20 +461,34 @@ describe("Images page", () => {
     await waitFor(() => expect(screen.getByTestId("run-image-task")).toBeEnabled());
     await userEvent.click(screen.getByTestId("run-image-task"));
 
-    // the scheduled disk at first, which would run the scheduled task
+    // the scheduled disk at first; the image runs in a console window anyway
     await waitFor(() => expect(screen.getByLabelText(/Disk 3 - NVMe/)).toBeChecked());
-    expect(screen.getByTestId("create-image-how")).toHaveTextContent("scheduled task");
-
-    // another disk too: the image runs in a console window instead
-    await userEvent.click(screen.getByLabelText(/Disk 1 - SATA SSD/));
     expect(screen.getByTestId("create-image-how")).toHaveTextContent("console window");
+    expect(screen.getByTestId("create-image-how")).toHaveTextContent("A schedule, if any, is not affected");
 
+    await userEvent.click(screen.getByTestId("start-image"));
+
+    await waitFor(() => expect(screen.getByText(/Creating images of the disks holding C:/)).toBeInTheDocument());
+    expect(window.kopiaUI.createImageElevated).toHaveBeenCalledWith(["C:"]);
+    expect(window.kopiaUI.runImageTaskElevated).not.toHaveBeenCalled();
+    expect(axiosMock.history.post).toHaveLength(0);
+  });
+
+  test("creates an image of other disks than the schedule's", async () => {
+    mockLists(scheduledStatus());
+    mockDisks();
+    window.kopiaUI = { createImageElevated: vi.fn().mockResolvedValue("started") };
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("run-image-task")).toBeEnabled());
+    await userEvent.click(screen.getByTestId("run-image-task"));
+    await waitFor(() => expect(screen.getByLabelText(/Disk 3 - NVMe/)).toBeChecked());
+
+    await userEvent.click(screen.getByLabelText(/Disk 1 - SATA SSD/));
     await userEvent.click(screen.getByTestId("start-image"));
 
     await waitFor(() => expect(screen.getByText(/Creating images of the disks holding C: D:/)).toBeInTheDocument());
     expect(window.kopiaUI.createImageElevated).toHaveBeenCalledWith(["C:", "D:"]);
-    expect(window.kopiaUI.runImageTaskElevated).not.toHaveBeenCalled();
-    expect(axiosMock.history.post).toHaveLength(0);
   });
 
   test("keeps the create dialog open when the prompt is declined", async () => {
@@ -602,9 +539,114 @@ describe("Images page", () => {
     await waitFor(() => expect(screen.getByText("kopia image recovery-media create")).toBeInTheDocument());
     expect(screen.queryByTestId("create-recovery-media")).not.toBeInTheDocument();
   });
+
+  const runningProgress = {
+    volumes: ["C:"],
+    startTime: "2026-11-16T20:00:00Z",
+    updatedAt: "2026-11-16T20:10:00Z",
+    disk: 1,
+    disks: 1,
+    diskNumber: 3,
+    partition: 3,
+    partitions: 4,
+    partitionName: "p3-C.img",
+    bytesDone: 250000000000,
+    bytesTotal: 1000000000000,
+    uploadedBytes: 5000000000,
+  };
+
+  test("shows the image in progress and stops it", async () => {
+    mockLists(scheduledStatus({ progress: runningProgress }));
+    window.kopiaUI = { stopImageElevated: vi.fn().mockResolvedValue("done") };
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("image-progress")).toHaveTextContent("partition 3 of 4 (p3-C.img)"));
+    expect(screen.getByTestId("image-progress-bar")).toHaveTextContent("25%");
+    expect(screen.getByTestId("image-progress-details")).toHaveTextContent("250 GB of 1 TB");
+    expect(screen.getByTestId("image-progress-details")).toHaveTextContent("5 GB uploaded");
+    // 10 minutes for a quarter: about half an hour left
+    expect(screen.getByTestId("image-progress-details")).toHaveTextContent("about 30 minutes left");
+
+    // one image at a time
+    expect(screen.getByTestId("run-image-task")).toBeDisabled();
+
+    await userEvent.click(screen.getByTestId("stop-image"));
+
+    await waitFor(() => expect(screen.getByText(/The image is stopping/)).toBeInTheDocument());
+    expect(window.kopiaUI.stopImageElevated).toHaveBeenCalledTimes(1);
+
+    confirm.mockRestore();
+  });
+
+  test("shows an image that is stopping", async () => {
+    mockLists(scheduledStatus({ progress: { ...runningProgress, stopping: true } }));
+    window.kopiaUI = { stopImageElevated: vi.fn() };
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("stop-image")).toHaveTextContent("Stopping..."));
+    expect(screen.getByTestId("stop-image")).toBeDisabled();
+  });
+
+  test("in a browser, tells how to stop the image", async () => {
+    mockLists(scheduledStatus({ progress: runningProgress }));
+    renderImages();
+
+    await waitFor(() => expect(screen.getByText("kopia image stop")).toBeInTheDocument());
+    expect(screen.queryByTestId("stop-image")).not.toBeInTheDocument();
+  });
+
+  test("shows a stopped run", async () => {
+    const st = scheduledStatus();
+    st.lastRun = { ...st.lastRun, success: false, stopped: true, error: "stopped by request" };
+    mockLists(st);
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("last-run-stopped")).toBeInTheDocument());
+    expect(screen.queryByTestId("last-run-failed")).not.toBeInTheDocument();
+    expect(screen.queryByText("stopped by request")).not.toBeInTheDocument();
+  });
+
+  test("tells when an image started from the page did not run", async () => {
+    mockLists(
+      scheduledStatus({
+        lastRequest: {
+          id: "r",
+          operation: "create",
+          time: "2026-11-16T20:00:00Z",
+          success: false,
+          error: "open repository: invalid password",
+        },
+      }),
+    );
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("image-failed-start")).toHaveTextContent("invalid password"));
+  });
+
+  test("forgets a failed start once a later image ran", async () => {
+    mockLists(
+      scheduledStatus({
+        lastRequest: { id: "r", operation: "create", time: "2026-11-15T20:00:00Z", success: false, error: "x" },
+      }),
+    );
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("schedule-summary")).toBeInTheDocument());
+    expect(screen.queryByTestId("image-failed-start")).not.toBeInTheDocument();
+  });
 });
 
 describe("Images helpers", () => {
+  test("progressFraction", () => {
+    expect(progressFraction({ disk: 1, disks: 1, bytesDone: 0, bytesTotal: 0 })).toBe(0);
+    expect(progressFraction({ disk: 1, disks: 1, bytesDone: 50, bytesTotal: 100 })).toBe(0.5);
+    // the second of two disks, half done
+    expect(progressFraction({ disk: 2, disks: 2, bytesDone: 50, bytesTotal: 100 })).toBe(0.75);
+    // never past the end
+    expect(progressFraction({ disk: 1, disks: 1, bytesDone: 150, bytesTotal: 100 })).toBe(1);
+  });
+
   test("taskResultDisplayName", () => {
     expect(taskResultDisplayName("0")).toBe("Succeeded");
     expect(taskResultDisplayName("267011")).toBe("Has not run yet");
