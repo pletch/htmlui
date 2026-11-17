@@ -1,4 +1,5 @@
 import axios from "axios";
+import moment from "moment";
 import React, { Component, use } from "react";
 import Badge from "react-bootstrap/Badge";
 import Form from "react-bootstrap/Form";
@@ -360,14 +361,15 @@ class SnapshotHistoryInternal extends Component {
     const columns = [
       {
         id: "selected",
-        header: "Selected",
-        width: 20,
-        align: "center",
+        header: "",
+        enableSorting: false,
+        meta: { className: "col-select" },
         cell: (x) => (
           <div className="form-check multiselect">
             <input
               type="checkbox"
               className="form-check-input"
+              aria-label={"Select snapshot " + rfc3339TimestampForDisplay(x.row.original.startTime)}
               checked={this.isSelected(x.row.original)}
               onChange={() => this.toggleSelected(x.row.original)}
             />
@@ -376,65 +378,57 @@ class SnapshotHistoryInternal extends Component {
       },
       {
         id: "startTime",
-        header: "Start time",
-        width: 200,
-        cell: (x) => {
-          let timestamp = rfc3339TimestampForDisplay(x.row.original.startTime);
-          return (
-            <Link to={objectLink(x.row.original.rootID)} state={{ label: path }}>
-              {timestamp}
-            </Link>
-          );
-        },
-      },
-      {
-        id: "description",
-        header: "",
-        width: 20,
-        cell: (x) => this.descriptionFor(x.row.original),
-      },
-      {
-        id: "rootID",
-        header: "Root",
-        width: "",
-        accessorFn: (x) => x.rootID,
+        header: "Snapshot",
+        meta: { className: "col-source" },
+        accessorFn: (x) => x.startTime,
         cell: (x) => (
           <>
-            <span className="snapshot-hash">{x.cell.getValue()}</span>
+            <div className="snapshot-title">
+              <Link
+                className="source-link"
+                to={objectLink(x.row.original.rootID)}
+                state={{ label: path }}
+                title={moment(x.row.original.startTime).fromNow()}
+              >
+                <span className="source-name">{rfc3339TimestampForDisplay(x.row.original.startTime)}</span>
+              </Link>
+              {this.descriptionFor(x.row.original)}
+            </div>
             {x.row.original.description && (
-              <div className="snapshot-description">
-                <small>{x.row.original.description}</small>
-              </div>
+              <div className="snapshot-description-text">{x.row.original.description}</div>
             )}
+            <div className="snapshot-hash" title="Root object ID">
+              {x.row.original.rootID}
+            </div>
           </>
         ),
       },
       {
+        id: "retention",
         header: "Retention",
+        enableSorting: false,
         accessorFn: (x) => x.retention,
-        width: "",
         cell: (x) => (
-          <span>
+          <div className="retention-pills">
             {x.cell.getValue().map((l) => (
-              <React.Fragment key={l}>
-                <Badge bg={"retention-badge-" + pillVariant(l)}>{l}</Badge>{" "}
-              </React.Fragment>
+              <Badge key={l} bg={"retention-badge-" + pillVariant(l)}>
+                {l}
+              </Badge>
             ))}
             {(x.row.original.pins || []).map((l) => (
-              <React.Fragment key={l}>
-                <Badge bg="snapshot-pin" onClick={() => this.editPin(x.row.original, l)}>
-                  <FontAwesomeIcon icon={faThumbtack} /> {l}
-                </Badge>{" "}
-              </React.Fragment>
+              <Badge key={"pin-" + l} bg="snapshot-pin" onClick={() => this.editPin(x.row.original, l)}>
+                <FontAwesomeIcon icon={faThumbtack} /> {l}
+              </Badge>
             ))}
             {this.newPinFor(x.row.original)}
-          </span>
+          </div>
         ),
       },
       {
+        id: "size",
         header: "Size",
+        meta: { className: "col-num" },
         accessorFn: (x) => x.imageBytesRead ?? x.summary?.size ?? 0,
-        width: 100,
         cell: (x) =>
           snapshotSizeCell(
             x.row.original.imageBytesRead,
@@ -444,26 +438,30 @@ class SnapshotHistoryInternal extends Component {
           ),
       },
       {
+        id: "newData",
         header: "New Data",
+        meta: { className: "col-num" },
         accessorFn: (x) => x.newDataBytes ?? -1,
-        width: 100,
         cell: (x) => newDataBytesCell(x.cell.getValue(), bytesStringBase2),
       },
       {
+        id: "stored",
         header: "Stored",
+        meta: { className: "col-num" },
         accessorFn: (x) => x.uploadedBytes ?? -1,
-        width: 100,
         cell: (x) => uploadedBytesCell(x.cell.getValue(), bytesStringBase2),
       },
       {
-        header: "Files",
+        id: "files",
+        header: "Files / Dirs",
+        meta: { className: "col-num col-time" },
         accessorFn: (x) => x.summary?.files ?? 0,
-        width: 100,
-      },
-      {
-        header: "Dirs",
-        accessorFn: (x) => x.summary?.dirs ?? 0,
-        width: 100,
+        cell: (x) => (
+          <>
+            <span className="time-last">{(x.row.original.summary?.files ?? 0).toLocaleString()}</span>
+            <span className="time-next">{(x.row.original.summary?.dirs ?? 0).toLocaleString()} dirs</span>
+          </>
+        ),
       },
     ];
 

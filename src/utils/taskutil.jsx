@@ -2,8 +2,56 @@ import { faBan, faCheck, faExclamationCircle, faXmark } from "@fortawesome/free-
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import axios from "axios";
 import React from "react";
+import Badge from "react-bootstrap/Badge";
 import Spinner from "react-bootstrap/Spinner";
 import { formatDuration } from "./formatutils";
+
+const STATUS_PILLS = {
+  RUNNING: { bg: "primary", label: "running", prefix: "for" },
+  SUCCESS: { bg: "success", label: "succeeded", prefix: "took" },
+  FAILED: { bg: "danger", label: "failed", prefix: "after" },
+  CANCELED: { bg: "secondary", label: "canceled", prefix: "after" },
+};
+
+/**
+ * Shows a task's status as a pill with its duration under it; a running task
+ * also gets a spinner and a button to cancel it.
+ * @param {object} task - a task from /api/v1/tasks
+ */
+export function taskStatusPill(task) {
+  const pill = STATUS_PILLS[task.status];
+  if (!pill) {
+    return <Badge bg="secondary">{String(task.status || "").toLowerCase()}</Badge>;
+  }
+
+  const dur = formatDuration(task.startTime, task.endTime, true);
+  return (
+    <>
+      <span className="time-last task-status">
+        {task.status === "RUNNING" && <Spinner animation="border" variant="primary" size="sm" />}
+        <Badge bg={pill.bg} data-testid="task-status">
+          {pill.label}
+        </Badge>
+        {task.status === "RUNNING" && (
+          <button
+            className="btn btn-sm btn-link task-cancel"
+            type="button"
+            title="Cancel task"
+            aria-label="Cancel task"
+            onClick={() => cancelTask(task.id)}
+          >
+            <FontAwesomeIcon color="red" icon={faXmark} />
+          </button>
+        )}
+      </span>
+      {dur && (
+        <span className="time-next">
+          {pill.prefix} {dur}
+        </span>
+      )}
+    </>
+  );
+}
 
 export function cancelTask(tid) {
   axios

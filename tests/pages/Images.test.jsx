@@ -418,8 +418,22 @@ describe("Images page", () => {
     await waitFor(() => expect(screen.getByText("p3-C.img")).toBeInTheDocument());
     await userEvent.click(screen.getByLabelText("All computers"));
 
-    await waitFor(() => expect(screen.getByText("laptop")).toBeInTheDocument());
-    expect(screen.getByText("Computer")).toBeInTheDocument();
+    // with images of two computers, each image names its computer
+    await waitFor(() => expect(screen.getByText("laptop", { selector: ".source-owner" })).toBeInTheDocument());
+    expect(screen.getByText("pc", { selector: ".source-owner" })).toBeInTheDocument();
+  });
+
+  test("names the computer only when images of several computers are listed", async () => {
+    mockLists(scheduledStatus());
+    renderImages();
+
+    await waitFor(() => expect(screen.getByText("p3-C.img", { selector: ".source-path" })).toBeInTheDocument());
+    expect(
+      screen.getByText("Disk 0f6ab3f2-1c3d-4e5f-8a9b-0c1d2e3f4a51", { selector: ".source-name" }),
+    ).toBeInTheDocument();
+    expect(document.querySelector(".source-owner")).toBeNull();
+    // the start time shows how long the image took (1 hour in the sample)
+    expect(screen.getByText(/^took /)).toBeInTheDocument();
   });
 
   test("shows tasks that Task Scheduler hides as scheduled", async () => {

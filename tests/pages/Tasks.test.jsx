@@ -389,14 +389,47 @@ describe("Tasks component", () => {
     renderTasks();
 
     await waitFor(() => {
-      // The real KopiaTable renders links in the task cells
-      const links = screen.getAllByRole("link");
-      // At least one link should exist
-      expect(links.length).toBeGreaterThan(0);
-      // The link text should be a relative time (from moment.js)
-      // Since the test data uses 2023-01-01, it will show something like "3 years ago"
-      const linkText = links[0].textContent;
-      expect(linkText).toMatch(/\d+ years? ago/);
+      // The task cell links the description, with the kind under it
+      const link = screen.getAllByRole("link")[0];
+      expect(link).toHaveClass("source-link");
+      expect(link.querySelector(".source-name")).toHaveTextContent("Test task");
+      expect(link.querySelector(".source-path")).toHaveTextContent("Snapshot");
     });
+    // The start time is a relative time; 2023-01-01 is years ago
+    expect(screen.getByText(/\d+ years? ago/)).toBeInTheDocument();
+    expect(screen.getByTestId("task-status")).toHaveTextContent("succeeded");
+  });
+
+  test("shows each status as a pill with its duration", async () => {
+    const tasks = [
+      {
+        id: "t1",
+        kind: "Snapshot",
+        description: "ok",
+        status: "SUCCESS",
+        startTime: "2023-01-01T10:00:00Z",
+        endTime: "2023-01-01T10:00:05Z",
+      },
+      {
+        id: "t2",
+        kind: "Snapshot",
+        description: "bad",
+        status: "FAILED",
+        startTime: "2023-01-01T10:00:00Z",
+        endTime: "2023-01-01T10:00:05Z",
+      },
+      { id: "t3", kind: "Snapshot", description: "busy", status: "RUNNING", startTime: "2023-01-01T10:00:00Z" },
+    ];
+    axiosMock.onGet("/api/v1/tasks").reply(200, { tasks });
+
+    renderTasks();
+
+    await waitFor(() => expect(screen.getAllByTestId("task-status")).toHaveLength(3));
+    const pills = screen.getAllByTestId("task-status");
+    expect(pills.map((p) => p.textContent).sort()).toEqual(["failed", "running", "succeeded"]);
+    expect(pills.find((p) => p.textContent === "failed")).toHaveClass("bg-danger");
+    expect(screen.getByText(/^took /)).toBeInTheDocument();
+    expect(screen.getByText(/^after /)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel task" })).toBeInTheDocument();
   });
 });

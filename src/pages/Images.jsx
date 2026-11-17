@@ -488,76 +488,78 @@ function ImageStatus({
   );
 }
 
+/**
+ * Shows an image as its disk name, linking to the image's files, with its
+ * volumes and, when images of several computers are listed, the computer under it.
+ */
+function imageCell(image, diskName, showHost) {
+  const volumes = (image.volumes || []).map((v) => v.entryName).join(", ");
+  return (
+    <>
+      <Link className="source-link" to={objectLink(image.rootID)} title={image.source.host + ": " + diskName}>
+        <span className="source-name">{diskName}</span>
+        {volumes && <span className="source-path">{volumes}</span>}
+        {showHost && <span className="source-owner">{image.source.host}</span>}
+      </Link>
+      {image.metadataError && (
+        <FontAwesomeIcon
+          color="red"
+          icon={faExclamationTriangle}
+          title={"Unable to read the image statistics: " + image.metadataError}
+        />
+      )}
+    </>
+  );
+}
+
 function imageColumns(bytesStringBase2, showHost) {
   const size = (v) => (v === undefined ? "" : sizeDisplayName(v, bytesStringBase2));
 
-  const columns = [
+  const num = { className: "col-num" };
+
+  return [
     {
       id: "startTime",
-      header: "Start Time",
-      width: 160,
+      header: "Started",
+      meta: { className: "col-time" },
       accessorFn: (x) => x.startTime,
       cell: (x) => (
-        <Link to={objectLink(x.row.original.rootID)} title={moment(x.getValue()).toLocaleString()}>
-          {moment(x.getValue()).fromNow()}
-        </Link>
-      ),
-    },
-    {
-      id: "disk",
-      header: "Disk",
-      accessorFn: (x) => diskDisplayName(x.source),
-      cell: (x) => (
         <>
-          {x.getValue()}
-          {x.row.original.metadataError && (
-            <>
-              {" "}
-              <FontAwesomeIcon
-                color="red"
-                icon={faExclamationTriangle}
-                title={"Unable to read the image statistics: " + x.row.original.metadataError}
-              />
-            </>
+          <span className="time-last" title={moment(x.getValue()).toLocaleString()}>
+            {moment(x.getValue()).fromNow()}
+          </span>
+          {x.row.original.endTime && (
+            <span className="time-next">
+              took {formatDuration(x.row.original.startTime, x.row.original.endTime, true)}
+            </span>
           )}
         </>
       ),
     },
     {
-      id: "volumes",
-      header: "Volumes",
-      accessorFn: (x) => (x.volumes || []).map((v) => v.entryName).join(", "),
+      id: "disk",
+      header: "Image",
+      meta: { className: "col-source" },
+      accessorFn: (x) => diskDisplayName(x.source),
+      cell: (x) => imageCell(x.row.original, x.getValue(), showHost),
     },
-    {
-      id: "duration",
-      header: "Duration",
-      accessorFn: (x) => formatDuration(x.startTime, x.endTime, true),
-    },
-    { id: "size", header: "Disk Size", accessorFn: (x) => x.size, cell: (x) => size(x.getValue()) },
-    { id: "read", header: "Read", accessorFn: (x) => x.bytesRead, cell: (x) => size(x.getValue()) },
+    { id: "size", header: "Disk Size", meta: num, accessorFn: (x) => x.size, cell: (x) => size(x.getValue()) },
+    { id: "read", header: "Read", meta: num, accessorFn: (x) => x.bytesRead, cell: (x) => size(x.getValue()) },
     {
       id: "newData",
       header: "New Data",
+      meta: num,
       accessorFn: (x) => x.newDataBytes,
       cell: (x) => size(x.getValue()),
     },
     {
       id: "uploaded",
       header: "Stored",
+      meta: num,
       accessorFn: (x) => x.uploadedBytes,
       cell: (x) => size(x.getValue()),
     },
   ];
-
-  if (showHost) {
-    columns.splice(1, 0, {
-      id: "host",
-      header: "Computer",
-      accessorFn: (x) => x.source.host,
-    });
-  }
-
-  return columns;
 }
 
 /**
@@ -813,7 +815,10 @@ export function Images() {
           <FontAwesomeIcon icon={faInfoCircle} /> No disk images{allHosts ? "" : " of " + images.localHost} yet.
         </Alert>
       ) : (
-        <KopiaTable data={images.images} columns={imageColumns(bytesStringBase2, allHosts)} />
+        <KopiaTable
+          data={images.images}
+          columns={imageColumns(bytesStringBase2, new Set(images.images.map((i) => i.source.host)).size > 1)}
+        />
       )}
     </>
   );
