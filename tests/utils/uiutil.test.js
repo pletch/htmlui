@@ -1,4 +1,4 @@
-import { toAlgorithmOption, uploadedBytesCell, uploadedBytesTitle } from "../../src/utils/uiutil";
+import { snapshotSizeCell, toAlgorithmOption, uploadedBytesCell, uploadedBytesTitle } from "../../src/utils/uiutil";
 
 describe("toAlgorithmOption", () => {
   it("creates basic option element", () => {
@@ -40,5 +40,24 @@ describe("uploadedBytesCell", () => {
     expect(uploadedBytesCell(undefined, false)).toBe("");
     expect(uploadedBytesCell(null, false)).toBe("");
     expect(uploadedBytesCell(-1, false)).toBe("");
+  });
+});
+
+describe("snapshotSizeCell", () => {
+  it("shows the total size of a file snapshot", () => {
+    const cell = snapshotSizeCell(undefined, 2048, null, false);
+    expect(cell.props.children).toBe("2 KB");
+    expect(cell.props.title).toBeUndefined();
+  });
+
+  it("shows the bytes read for an image, with the disk size in the tooltip", () => {
+    const cell = snapshotSizeCell(611e9, 1e12, null, false);
+    expect(cell.props.children).toBe("611 GB");
+    expect(cell.props.title).toContain("1 TB");
+  });
+
+  it("treats a null imageBytesRead as a file snapshot", () => {
+    const cell = snapshotSizeCell(null, 2048, null, false);
+    expect(cell.props.children).toBe("2 KB");
   });
 });
