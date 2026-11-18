@@ -1,7 +1,8 @@
 import React from "react";
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import moment from "moment";
 import "@testing-library/jest-dom";
 import {
   Images,
@@ -195,9 +196,70 @@ describe("Images page", () => {
     expect(screen.getByText("not scheduled", { selector: "td .badge" })).toBeInTheDocument();
     expect(screen.getByText(/written to usb/)).toBeInTheDocument();
     expect(screen.getByTestId("run-image-task")).toBeEnabled();
+  });
 
-    // Contents links to the image's files in the snapshot browser
-    expect(screen.getByTestId("image-files")).toHaveAttribute("href", "/snapshots/dir/k1234");
+  test("names the tile action Mount & Browse", async () => {
+    mockLists(scheduledStatus());
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("browse-volume-3")).toHaveTextContent("Mount & Browse"));
+    expect(screen.getByTestId("browse-image")).toHaveTextContent("Mount & Browse");
+  });
+
+  test("browses the selected image's files in the Files tab", async () => {
+    mockLists(scheduledStatus());
+    axiosMock.onGet("/api/v1/images/files", { params: { root: "k1234", path: "" } }).reply(200, {
+      path: "",
+      entries: [
+        { name: "p3-C", dir: true, size: 0, mtime: "2026-11-16T02:00:00Z" },
+        { name: "p3-C.img", dir: false, size: 500000000000, mtime: "2026-11-16T02:00:00Z" },
+      ],
+    });
+    axiosMock.onGet("/api/v1/images/files", { params: { root: "k1234", path: "p3-C" } }).reply(200, {
+      path: "p3-C",
+      entries: [{ name: "Users", dir: true, size: 0, mtime: "2026-11-16T02:00:00Z" }],
+    });
+    axiosMock.onGet("/api/v1/images/files", { params: { root: "k1234", path: "p3-C/Users" } }).reply(200, {
+      path: "p3-C/Users",
+      entries: [],
+    });
+    axiosMock.onPost("/api/v1/mounts").reply(200, { path: "K:", root: "k1234" });
+    window.kopiaUI = { browseDirectory: vi.fn() };
+    renderImages();
+
+    // Files on the toolbar opens the tab
+    await waitFor(() => expect(screen.getByTestId("image-files")).toBeEnabled());
+    await userEvent.click(screen.getByTestId("image-files"));
+
+    await waitFor(() => expect(screen.getByTestId("image-file-p3-C.img")).toHaveTextContent("500 GB"));
+    const filesTab = screen.getByTestId("image-files-tab");
+    await userEvent.click(within(filesTab).getByTestId("show-cli-button"));
+    expect(filesTab.querySelector(".cli-equivalent").value).toContain("image ls m1 -l");
+
+    await userEvent.click(screen.getByTestId("image-file-p3-C"));
+    await waitFor(() => expect(screen.getByTestId("image-file-Users")).toBeInTheDocument());
+    await userEvent.click(screen.getByTestId("image-file-Users"));
+    await waitFor(() => expect(screen.getByText("This folder is empty.")).toBeInTheDocument());
+    expect(filesTab.querySelector(".cli-equivalent").value).toContain("image ls m1/p3-C/Users -l");
+
+    // mounting opens the folder being browsed
+    await userEvent.click(screen.getByTestId("image-files-open"));
+    await waitFor(() => expect(window.kopiaUI.browseDirectory).toHaveBeenCalledWith("K:\\p3-C\\Users"));
+
+    // the breadcrumb goes back up
+    await userEvent.click(screen.getByTestId("image-files-crumb-0"));
+    await waitFor(() => expect(screen.getByTestId("image-file-Users")).toBeInTheDocument());
+    await userEvent.click(screen.getByTestId("image-files-up"));
+    await waitFor(() => expect(screen.getByTestId("image-file-p3-C")).toBeInTheDocument());
+  });
+
+  test("shows the command for the images listed", async () => {
+    mockLists(scheduledStatus());
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("image-list")).toBeInTheDocument());
+    // Images, Recovery Media and Drivers; Files shows its own when opened
+    expect(screen.getAllByTestId("show-cli-button")).toHaveLength(3);
   });
 
   test("shows the selected image's partitions as a disk map", async () => {
@@ -332,7 +394,8 @@ describe("Images page", () => {
 
     await userEvent.click(screen.getByTestId("image-row-m0"));
     expect(screen.getByTestId("image-row-m0")).toHaveClass("table-active");
-    expect(screen.getByTestId("image-files")).toHaveAttribute("href", "/snapshots/dir/k0");
+    // the disk map shows the selected image
+    expect(screen.getByTestId("disk-map")).toHaveTextContent(moment("2026-11-15T02:00:00Z").format("LLL"));
 
     await userEvent.selectOptions(screen.getByTestId("image-disk-filter"), "Disk aaaaaaaa-1c3d-4e5f-8a9b-0c1d2e3f4a51");
     expect(screen.getAllByTestId("image-group")).toHaveLength(1);

@@ -1,5 +1,8 @@
 import {
+  faArrowUp,
   faChevronDown,
+  faFile,
+  faFolder,
   faChevronRight,
   faEject,
   faExclamationTriangle,
@@ -26,16 +29,16 @@ import Spinner from "react-bootstrap/Spinner";
 import Tab from "react-bootstrap/Tab";
 import Table from "react-bootstrap/Table";
 import Tabs from "react-bootstrap/Tabs";
-import { Link } from "react-router";
 import {
   CreateImageDialog,
   ImageScheduleForm,
   scheduleSummary,
   settingsFromSchedule,
 } from "../components/ImageScheduleForm";
+import { CLIEquivalent } from "../components/CLIEquivalent";
 import KopiaTable from "../components/KopiaTable";
 import { UIPreferencesContext } from "../contexts/UIPreferencesContext";
-import { formatDuration, objectLink, sizeDisplayName } from "../utils/formatutils";
+import { formatDuration, sizeDisplayName } from "../utils/formatutils";
 import { diskMapTiles, diskSourcePrefix, parseVolumeEntry, partitionTypeName, usedBytes } from "../utils/imageutil";
 import { redirect } from "../utils/uiutil";
 
@@ -531,7 +534,10 @@ function ScheduleTab({ status, bytesStringBase2, onEdit, onRemove, onPause, onUp
   );
 }
 
-/** Returns the path of a folder in a mounted snapshot, with the mount's own separator. */
+/**
+ * Returns the path of a folder in a mounted snapshot, with the mount's own
+ * separator. folder separates its names with "/".
+ */
 export function pathInMount(mountPath, folder) {
   if (!folder) {
     return mountPath;
@@ -540,7 +546,7 @@ export function pathInMount(mountPath, folder) {
   const windows = /^[A-Za-z]:/.test(mountPath) || mountPath.includes("\\");
   const sep = windows ? "\\" : "/";
 
-  return mountPath.replace(/[\\/]+$/, "") + sep + folder;
+  return mountPath.replace(/[\\/]+$/, "") + sep + folder.split("/").filter(Boolean).join(sep);
 }
 
 /** Names a partition tile like Macrium does: its number and its drive letter, GPT name or type. */
@@ -624,9 +630,9 @@ function DiskMap({ image, showHost, bytesStringBase2, busy, onBrowse }) {
                   disabled={busy}
                   data-testid={"browse-volume-" + t.number}
                   onClick={() => onBrowse(image, parseVolumeEntry(v.entryName).folder)}
-                  title="Mount the image and open this volume's files"
+                  title="Mount the image as a drive and open this volume's files in the file manager"
                 >
-                  <FontAwesomeIcon icon={faFolderOpen} /> Browse
+                  <FontAwesomeIcon icon={faFolderOpen} /> Mount &amp; Browse
                 </Button>
               )}
             </div>
@@ -978,6 +984,149 @@ export function RecoveryMediaDialog({ show, onHide, localHost, onBuild }) {
 }
 
 /**
+ * The Files tab: browses the selected image without mounting it. Its root
+ * shows a folder for each NTFS volume, next to the files the image consists
+ * of, as a mounted image does.
+ */
+export function ImageFiles({ image, bytesStringBase2, busy, onBrowse }) {
+  const [path, setPath] = useState([]);
+  const [listing, setListing] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let canceled = false;
+
+    axios
+      .get("/api/v1/images/files", { params: { root: image.rootID, path: path.join("/") } })
+      .then((result) => {
+        if (!canceled) {
+          setListing(result.data);
+          setError(null);
+        }
+      })
+      .catch((e) => {
+        if (!canceled) {
+          setListing(null);
+          setError(errorText(e));
+        }
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [image.rootID, path]);
+
+  const imageName = moment(image.startTime).format("L LT");
+  const loading = !error && (!listing || listing.path !== path.join("/"));
+  const command = "image ls " + image.id + (path.length > 0 ? "/" + path.join("/") : "") + " -l";
+
+  return (
+    <div className="image-files" data-testid="image-files-tab">
+      <div className="image-files-bar mb-2">
+        <nav className="image-files-path" aria-label="Folder">
+          <Button
+            size="sm"
+            variant="link"
+            className="image-files-crumb"
+            onClick={() => setPath([])}
+            disabled={path.length === 0}
+          >
+            <FontAwesomeIcon icon={faHardDrive} /> {diskDisplayName(image.source)}, {imageName}
+          </Button>
+          {path.map((p, i) => (
+            <React.Fragment key={i}>
+              <span className="image-files-sep">/</span>
+              <Button
+                size="sm"
+                variant="link"
+                className="image-files-crumb"
+                onClick={() => setPath(path.slice(0, i + 1))}
+                disabled={i === path.length - 1}
+                data-testid={"image-files-crumb-" + i}
+              >
+                {p}
+              </Button>
+            </React.Fragment>
+          ))}
+        </nav>
+        <div className="image-toolbar">
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={path.length === 0}
+            onClick={() => setPath(path.slice(0, -1))}
+            data-testid="image-files-up"
+          >
+            <FontAwesomeIcon icon={faArrowUp} /> Up
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={busy}
+            onClick={() => onBrowse(image, path.join("/"))}
+            data-testid="image-files-open"
+            title="Mount the image as a drive and open this folder in the file manager"
+          >
+            <FontAwesomeIcon icon={faFolderOpen} /> Mount &amp; Open Here
+          </Button>
+        </div>
+      </div>
+      {error && <Alert variant="danger">{error}</Alert>}
+      {loading && (
+        <p>
+          <Spinner size="sm" animation="border" /> Loading ...
+        </p>
+      )}
+      {!loading && listing && (
+        <>
+          {listing.truncated && (
+            <Alert variant="warning">Only the first {listing.entries.length} entries of this folder are listed.</Alert>
+          )}
+          <Table size="sm" hover responsive className="image-files-list" data-testid="image-files-list">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th className="col-num">Size</th>
+                <th className="col-time">Modified</th>
+              </tr>
+            </thead>
+            <tbody>
+              {listing.entries.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="text-muted">
+                    This folder is empty.
+                  </td>
+                </tr>
+              )}
+              {listing.entries.map((e) => (
+                <tr
+                  key={e.name}
+                  className={e.dir ? "image-files-dir" : undefined}
+                  onClick={e.dir ? () => setPath([...path, e.name]) : undefined}
+                  data-testid={"image-file-" + e.name}
+                >
+                  <td>
+                    <span className="dir-entry">
+                      <FontAwesomeIcon icon={e.dir ? faFolder : faFile} className="dir-entry-icon" />
+                      {e.name}
+                    </span>
+                  </td>
+                  <td className="col-num">{e.dir ? "" : sizeDisplayName(e.size, bytesStringBase2)}</td>
+                  <td className="col-time" title={moment(e.mtime).toLocaleString()}>
+                    {moment(e.mtime).format("L LT")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </>
+      )}
+      <CLIEquivalent command={command} />
+    </div>
+  );
+}
+
+/**
  * Lists the disk images in the repository and, on Windows, the scheduled
  * image tasks, the last image run and the recovery media of the computer the
  * server runs on.
@@ -996,6 +1145,7 @@ export function Images() {
   const [selectedId, setSelectedId] = useState(null);
   const [diskFilter, setDiskFilter] = useState("");
   const [mounts, setMounts] = useState({});
+  const [tab, setTab] = useState("images");
   const lastRunEndRef = useRef(undefined);
 
   // mounted snapshots by root object, to tell which images are mounted
@@ -1326,7 +1476,12 @@ export function Images() {
       {status.progress && (
         <RunProgress progress={status.progress} bytesStringBase2={bytesStringBase2} busy={running} onStop={onStop} />
       )}
-      <Tabs defaultActiveKey="images" className="mb-3 image-tabs" data-testid="image-tabs">
+      <Tabs
+        activeKey={tab}
+        onSelect={(k) => setTab(k || "images")}
+        className="mb-3 image-tabs"
+        data-testid="image-tabs"
+      >
         <Tab eventKey="images" title="Images">
           {selected && (
             <DiskMap
@@ -1375,9 +1530,9 @@ export function Images() {
               disabled={!selected || running}
               onClick={() => onBrowse(selected)}
               data-testid="browse-image"
-              title="Mount the image and open it: each NTFS volume is a folder"
+              title="Mount the image as a drive and open it in the file manager: each NTFS volume is a folder"
             >
-              <FontAwesomeIcon icon={faFolderOpen} /> Browse
+              <FontAwesomeIcon icon={faFolderOpen} /> Mount &amp; Browse
             </Button>
             <Button
               size="sm"
@@ -1388,16 +1543,16 @@ export function Images() {
             >
               <FontAwesomeIcon icon={faEject} /> Unmount
             </Button>
-            {selected && (
-              <Link
-                className="btn btn-sm btn-secondary"
-                to={objectLink(selected.rootID)}
-                data-testid="image-files"
-                title="Show the files the image consists of: its volume images, partition table and drivers"
-              >
-                <FontAwesomeIcon icon={faListUl} /> Contents
-              </Link>
-            )}
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={!selected}
+              onClick={() => setTab("files")}
+              data-testid="image-files"
+              title="Browse the image's files here, without mounting it"
+            >
+              <FontAwesomeIcon icon={faListUl} /> Files
+            </Button>
             <Button
               size="sm"
               variant="danger"
@@ -1422,6 +1577,22 @@ export function Images() {
               bytesStringBase2={bytesStringBase2}
             />
           )}
+          <CLIEquivalent command={"image list" + (allHosts ? " --all" : "")} />
+        </Tab>
+        <Tab eventKey="files" title="Files" mountOnEnter>
+          {selected ? (
+            <ImageFiles
+              key={selected.id}
+              image={selected}
+              bytesStringBase2={bytesStringBase2}
+              busy={running}
+              onBrowse={onBrowse}
+            />
+          ) : (
+            <Alert variant="info">
+              <FontAwesomeIcon icon={faInfoCircle} /> Select an image on the Images tab to browse its files.
+            </Alert>
+          )}
         </Tab>
         <Tab eventKey="schedule" title="Schedule">
           <ScheduleTab
@@ -1442,9 +1613,11 @@ export function Images() {
               <FontAwesomeIcon icon={faInfoCircle} /> Recovery media is built on Windows.
             </Alert>
           )}
+          <CLIEquivalent command="image recovery-media status" />
         </Tab>
         <Tab eventKey="drivers" title="Drivers">
           <DriverInventory mediaDrivers={status.recoveryMedia?.drivers} />
+          <CLIEquivalent command="image drivers" />
         </Tab>
       </Tabs>
       {editing && (
