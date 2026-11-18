@@ -1,5 +1,6 @@
 import React, { ReactNode, useCallback, useEffect, useState } from "react";
 import axios from "axios";
+import { reportWindowColors } from "../utils/windowcolors";
 
 export const PAGE_SIZES = [10, 20, 30, 40, 50, 100];
 export const UIPreferencesContext = React.createContext<UIPreferences>({} as UIPreferences);
@@ -164,6 +165,7 @@ export function UIPreferenceProvider(props: UIPreferenceProviderProps) {
     } else {
       doc.removeAttribute("data-bs-theme");
     }
+    reportWindowColors();
   };
 
   const providedValue = {

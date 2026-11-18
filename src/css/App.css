@@ -754,9 +754,16 @@ div.tab-body {
 }
 
 /* Disk Images page: a disk map of partition tiles like Macrium Reflect's, a
-   toolbar and the images grouped by disk. */
+   toolbar and the images grouped by disk. Colors come from the theme's own
+   variables: only the linear theme switches Bootstrap's to dark. */
+#kopia {
+  --image-tile-bg: color-mix(in srgb, var(--color-text-body) 7%, var(--background-color));
+  --image-border: color-mix(in srgb, var(--color-text-body) 20%, transparent);
+  --image-muted: color-mix(in srgb, var(--color-text-body) 62%, var(--background-color));
+  --image-accent: var(--color-primary);
+}
 .disk-map {
-  border: 1px solid var(--bs-border-color);
+  border: 1px solid var(--image-border);
   border-radius: 6px;
   padding: 10px 12px 12px;
 }
@@ -777,8 +784,8 @@ div.tab-body {
   min-width: 128px;
   padding: 6px 8px;
   border-radius: 4px;
-  background: var(--bs-tertiary-bg);
-  border: 1px solid var(--bs-border-color);
+  background: var(--image-tile-bg);
+  border: 1px solid var(--image-border);
   font-size: 0.85em;
   display: flex;
   flex-direction: column;
@@ -798,7 +805,7 @@ div.tab-body {
 
 .disk-tile-kind,
 .disk-tile-sizes {
-  color: var(--bs-secondary-color);
+  color: var(--image-muted);
   white-space: nowrap;
 }
 
@@ -816,21 +823,21 @@ div.tab-body {
 .disk-usage {
   height: 10px;
   margin: 4px 0;
-  border: 1px solid var(--bs-border-color);
-  background: var(--bs-body-bg);
+  border: 1px solid var(--image-border);
+  background: var(--background-color);
 }
 
 .disk-usage-used {
   height: 100%;
-  background: var(--bs-primary);
+  background: var(--image-accent);
 }
 
 /* a partition imaged as raw bytes is stored whole */
 .disk-usage-whole .disk-usage-used {
   background: repeating-linear-gradient(
     45deg,
-    var(--bs-secondary-color),
-    var(--bs-secondary-color) 4px,
+    var(--image-muted),
+    var(--image-muted) 4px,
     transparent 4px,
     transparent 8px
   );
@@ -840,7 +847,7 @@ div.tab-body {
   align-self: flex-start;
   padding: 0;
   font-size: 1em;
-  color: var(--bs-link-color);
+  color: var(--color-link);
 }
 
 .image-filters {
@@ -865,12 +872,12 @@ div.tab-body {
 }
 
 .image-group-host {
-  color: var(--bs-secondary-color);
+  color: var(--image-muted);
 }
 
 .image-list .image-group td {
   cursor: pointer;
-  background: var(--bs-tertiary-bg);
+  background: var(--image-tile-bg);
 }
 
 .image-list .image-row {
@@ -882,7 +889,7 @@ div.tab-body {
 }
 
 #kopia .image-list .image-row.table-active > td:first-child {
-  box-shadow: inset 3px 0 0 var(--bs-primary);
+  box-shadow: inset 3px 0 0 var(--image-accent);
 }
 
 /* Text size preference: the root font size, from which Bootstrap's rem-based
@@ -945,4 +952,74 @@ html.fs-4 {
 
 .app-repo-selector .dropdown-item {
   white-space: normal;
+}
+
+#kopia .disk-map,
+#kopia .disk-tile-title,
+#kopia .image-group-name {
+  color: var(--color-text-body);
+}
+
+/* Bootstrap's muted text is dark grey unless the theme switches Bootstrap to dark */
+#kopia .disk-map .text-muted,
+#kopia .image-list .text-muted,
+#kopia .image-files .text-muted {
+  color: var(--image-muted) !important;
+}
+
+/* Files tab of the Disk Images page */
+.image-files-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.image-files-path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+}
+
+#kopia .image-files-crumb {
+  padding: 0 2px;
+  margin: 0;
+  color: var(--color-link);
+}
+
+#kopia .image-files-crumb:disabled {
+  color: var(--color-text-body);
+  opacity: 1;
+  font-weight: 600;
+}
+
+.image-files-sep {
+  padding: 0 4px;
+  color: var(--image-muted);
+}
+
+.image-files-list .image-files-dir {
+  cursor: pointer;
+}
+
+/* Disk Images tabs and tables in the theme's colors (the linear theme styles its own) */
+#kopia .image-tabs {
+  border-bottom-color: var(--image-border);
+}
+
+#kopia .image-tabs .nav-link {
+  color: var(--color-link);
+}
+
+#kopia .image-tabs .nav-link.active {
+  color: var(--color-text-body);
+  background-color: var(--background-color);
+  border-color: var(--image-border) var(--image-border) var(--background-color);
+}
+
+#kopia .image-list td,
+#kopia .image-files-list td {
+  color: var(--color-text-body);
 }
