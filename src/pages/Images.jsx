@@ -36,6 +36,7 @@ import {
   settingsFromSchedule,
 } from "../components/ImageScheduleForm";
 import { CLIEquivalent } from "../components/CLIEquivalent";
+import { ImageRetention } from "../components/ImageRetention";
 import KopiaTable from "../components/KopiaTable";
 import { UIPreferencesContext } from "../contexts/UIPreferencesContext";
 import { formatDuration, sizeDisplayName } from "../utils/formatutils";
@@ -1604,6 +1605,9 @@ export function Images() {
             onUpdate={onUpdate}
             busy={running}
           />
+        </Tab>
+        <Tab eventKey="retention" title="Retention" mountOnEnter>
+          <ImageRetention disks={disks} titleOf={diskDisplayName} />
         </Tab>
         <Tab eventKey="media" title="Recovery Media">
           {status.supported ? (

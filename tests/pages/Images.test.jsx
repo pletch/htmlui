@@ -179,7 +179,7 @@ describe("Images page", () => {
     expect(screen.getByTestId("image-row-m1")).toHaveClass("table-active");
     expect(screen.getByTestId("disk-map")).toHaveTextContent("Disk 0f6ab3f2-1c3d-4e5f-8a9b-0c1d2e3f4a51");
     expect(screen.getByText("p3-C.img")).toBeInTheDocument();
-    for (const tab of ["Images", "Schedule", "Recovery Media", "Drivers"]) {
+    for (const tab of ["Images", "Schedule", "Retention", "Recovery Media", "Drivers"]) {
       expect(screen.getByRole("tab", { name: tab })).toBeInTheDocument();
     }
     expect(screen.getByText("Disk Size")).toBeInTheDocument();
@@ -196,6 +196,30 @@ describe("Images page", () => {
     expect(screen.getByText("not scheduled", { selector: "td .badge" })).toBeInTheDocument();
     expect(screen.getByText(/written to usb/)).toBeInTheDocument();
     expect(screen.getByTestId("run-image-task")).toBeEnabled();
+  });
+
+  test("sets the retention of each disk in the Retention tab", async () => {
+    mockLists(scheduledStatus());
+
+    const policyURL = "/api/v1/policy?userName=u&host=pc&path=" + encodeURIComponent(image.source.path);
+    axiosMock.onGet(policyURL).reply(200, { retention: { keepDaily: 7 } });
+    axiosMock.onPost(/\/api\/v1\/policy\/resolve/).reply(200, {
+      effective: { retention: { keepDaily: 7 } },
+      definition: { retention: { keepDaily: image.source } },
+    });
+
+    renderImages();
+
+    const user = userEvent.setup();
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Retention" })).toBeInTheDocument());
+    await user.click(screen.getByRole("tab", { name: "Retention" }));
+
+    const disk = await screen.findByTestId("retention-" + image.source.path);
+    expect(within(disk).getByText("Disk 0f6ab3f2-1c3d-4e5f-8a9b-0c1d2e3f4a51")).toBeInTheDocument();
+    await waitFor(() => expect(within(disk).getByTestId("retention-input-keepDaily")).toHaveValue("7"));
+    await waitFor(() =>
+      expect(within(disk).getByTestId("retention-effective-keepDaily")).toHaveTextContent("this disk"),
+    );
   });
 
   test("names the tile action Mount & Browse", async () => {
