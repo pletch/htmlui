@@ -878,14 +878,17 @@ function sameHost(a, b) {
 /**
  * Asks whose drivers to add to recovery media before building it: the media
  * restores this computer with its own drivers, and the other computers whose
- * images store drivers, when chosen, with theirs. onBuild receives the chosen
- * computers and returns a promise of the message to show.
+ * images store drivers, when chosen, with theirs. It also asks whether to
+ * write a USB stick or save an ISO file. onBuild receives the chosen computers
+ * and {iso, allDrivers}, and returns a promise of the message to show.
  */
 export function RecoveryMediaDialog({ show, onHide, localHost, onBuild }) {
   const [inventory, setInventory] = useState(null);
   const [chosen, setChosen] = useState(null);
   const [message, setMessage] = useState(null);
   const [building, setBuilding] = useState(false);
+  const [iso, setISO] = useState(false);
+  const [allDrivers, setAllDrivers] = useState(false);
 
   useEffect(() => {
     axios
@@ -905,7 +908,7 @@ export function RecoveryMediaDialog({ show, onHide, localHost, onBuild }) {
     setBuilding(true);
     setMessage(null);
 
-    onBuild(selected)
+    onBuild(allDrivers ? [] : selected, { iso, allDrivers })
       .then((m) => {
         if (m.variant !== "success") {
           setMessage(m);
@@ -934,12 +937,27 @@ export function RecoveryMediaDialog({ show, onHide, localHost, onBuild }) {
             </p>
             {others.length > 0 ? (
               <Form.Group className="mb-3" data-testid="media-driver-hosts">
+                <Form.Check
+                  type="checkbox"
+                  id="media-drivers-all"
+                  data-testid="media-drivers-all"
+                  checked={allDrivers}
+                  onChange={(e) => setAllDrivers(e.target.checked)}
+                  label={
+                    <span>
+                      All computers{" "}
+                      <span className="text-muted small">including those whose images store drivers later on</span>
+                    </span>
+                  }
+                />
                 {others.map((h) => (
                   <Form.Check
                     key={h.host}
                     type="checkbox"
                     id={"media-drivers-" + h.host}
-                    checked={selected.some((s) => sameHost(s, h.host))}
+                    className="ms-4"
+                    disabled={allDrivers}
+                    checked={allDrivers || selected.some((s) => sameHost(s, h.host))}
                     onChange={(e) => toggle(h.host, e.target.checked)}
                     label={
                       <span title={h.drivers.map((d) => d.class + " " + d.inf + " " + d.version).join("\n")}>
@@ -961,8 +979,30 @@ export function RecoveryMediaDialog({ show, onHide, localHost, onBuild }) {
             )}
           </>
         )}
+        <Form.Group className="mb-3" data-testid="media-target">
+          <Form.Check
+            type="radio"
+            name="media-target"
+            id="media-target-usb"
+            data-testid="media-target-usb"
+            checked={!iso}
+            onChange={() => setISO(false)}
+            label="Write it to a USB stick, which is erased"
+          />
+          <Form.Check
+            type="radio"
+            name="media-target"
+            id="media-target-iso"
+            data-testid="media-target-iso"
+            checked={iso}
+            onChange={() => setISO(true)}
+            label="Save it as an ISO file, to write to a USB stick with a tool such as Rufus when needed"
+          />
+        </Form.Group>
         <p className="text-muted small mb-0">
-          The media is built in a console window, which asks which USB disk to erase.
+          {iso
+            ? "You choose where to save the ISO file, then the media is built in a console window. Keep a copy away from the computers it restores."
+            : "The media is built in a console window, which asks which USB disk to erase."}
         </p>
       </Modal.Body>
       <Modal.Footer>
@@ -1287,17 +1327,28 @@ export function Images() {
 
   const onCreateRecoveryMedia = () => setCreatingMedia(true);
 
-  const buildRecoveryMedia = (driverHosts) =>
+  const buildRecoveryMedia = (driverHosts, options) =>
     window.kopiaUI
-      .createRecoveryMediaElevated(driverHosts)
+      .createRecoveryMediaElevated(driverHosts, options)
       .then((result) =>
         result === "canceled"
-          ? { variant: "warning", text: "The administrator prompt was declined, so no media was built." }
+          ? {
+              variant: "warning",
+              text: options.iso
+                ? "The save dialog or the administrator prompt was canceled, so no media was built."
+                : "The administrator prompt was declined, so no media was built.",
+            }
           : {
               variant: "success",
               text:
-                "Building recovery media in a console window: it asks which USB disk to erase." +
-                (driverHosts.length > 0 ? " It adds the drivers of " + driverHosts.join(", ") + "." : "") +
+                (options.iso
+                  ? "Building recovery media in a console window: it saves the ISO file you chose."
+                  : "Building recovery media in a console window: it asks which USB disk to erase.") +
+                (options.allDrivers
+                  ? " It adds the drivers of every computer whose images store them."
+                  : driverHosts.length > 0
+                    ? " It adds the drivers of " + driverHosts.join(", ") + "."
+                    : "") +
                 " The result shows here when it ends.",
             },
       )
