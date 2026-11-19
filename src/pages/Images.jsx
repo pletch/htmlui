@@ -778,9 +778,10 @@ export function mediaHasDriver(mediaDrivers, driver) {
  * Lists the storage, network and USB drivers that the images of each
  * computer store, which recovery media needs to restore it, and whether this
  * computer's recovery media has them. It shows nothing until an image stores
- * drivers, nor when the server cannot list them.
+ * drivers, nor when the server cannot list them. It lists them again when
+ * lastRunEnd changes: a run that ended may have stored drivers.
  */
-function DriverInventory({ mediaDrivers }) {
+function DriverInventory({ mediaDrivers, lastRunEnd }) {
   const [hosts, setHosts] = useState(null);
 
   useEffect(() => {
@@ -788,7 +789,7 @@ function DriverInventory({ mediaDrivers }) {
       .get("/api/v1/images/drivers")
       .then((result) => setHosts(result.data.hosts || []))
       .catch(() => setHosts([]));
-  }, []);
+  }, [lastRunEnd]);
 
   if (!hosts) {
     return null;
@@ -1671,7 +1672,7 @@ export function Images() {
           <CLIEquivalent command="image recovery-media status" />
         </Tab>
         <Tab eventKey="drivers" title="Drivers">
-          <DriverInventory mediaDrivers={status.recoveryMedia?.drivers} />
+          <DriverInventory mediaDrivers={status.recoveryMedia?.drivers} lastRunEnd={status.lastRun?.endTime} />
           <CLIEquivalent command="image drivers" />
         </Tab>
       </Tabs>

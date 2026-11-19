@@ -716,6 +716,39 @@ describe("Images page", () => {
     expect(screen.getByTestId("driver-inventory-missing")).toHaveTextContent("lacks drivers of laptop");
   });
 
+  test("lists the drivers again when an image run ends", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    try {
+      const before = scheduledStatus();
+      const after = scheduledStatus({ lastRun: { ...before.lastRun, endTime: "2026-11-19T12:00:00Z" } });
+
+      axiosMock.onGet("/api/v1/images").reply(200, { images: [image], localHost: "pc", localUsername: "u" });
+      axiosMock.onGet("/api/v1/images/status").replyOnce(200, before);
+      axiosMock.onGet("/api/v1/images/status").reply(200, after);
+      axiosMock.onGet("/api/v1/images/drivers").replyOnce(200, { hosts: [] });
+      axiosMock.onGet("/api/v1/images/drivers").reply(200, {
+        hosts: [
+          {
+            host: "laptop",
+            imageTime: "2026-11-19T11:00:00Z",
+            drivers: [{ class: "Net", inf: "netwtw6e.inf", version: "24.80.0.2", entry: "oem100" }],
+          },
+        ],
+      });
+      renderImages();
+
+      await waitFor(() => expect(screen.getByTestId("driver-inventory-empty")).toBeInTheDocument());
+
+      // the next status poll reports the run that ended
+      await vi.advanceTimersByTimeAsync(6000);
+
+      await waitFor(() => expect(screen.getByText("netwtw6e.inf")).toBeInTheDocument());
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("shows no driver inventory until an image stores drivers", async () => {
     mockLists(scheduledStatus());
     axiosMock.onGet("/api/v1/images/drivers").reply(200, { hosts: [] });
