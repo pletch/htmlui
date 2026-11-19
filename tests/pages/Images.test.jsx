@@ -885,7 +885,33 @@ describe("Images page", () => {
     await userEvent.click(screen.getByTestId("build-recovery-media"));
 
     await waitFor(() => expect(screen.getByText(/Building recovery media in a console window/)).toBeInTheDocument());
-    expect(window.kopiaUI.createRecoveryMediaElevated).toHaveBeenCalledWith([]);
+    expect(window.kopiaUI.createRecoveryMediaElevated).toHaveBeenCalledWith([], { iso: false, allDrivers: false });
+  });
+
+  test("saves recovery media with every computer's drivers as an ISO file", async () => {
+    mockLists(scheduledStatus());
+    axiosMock.onGet("/api/v1/images/drivers").reply(200, {
+      hosts: [
+        { host: "LAPTOP", imageTime: "2026-11-15T00:00:00Z", drivers: [{ class: "Net", inf: "a.inf", version: "1" }] },
+      ],
+    });
+    window.kopiaUI = { createRecoveryMediaElevated: vi.fn().mockResolvedValue("started") };
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("create-recovery-media")).toBeEnabled());
+    await userEvent.click(screen.getByTestId("create-recovery-media"));
+
+    await waitFor(() => expect(screen.getByTestId("media-drivers-all")).toBeInTheDocument());
+    await userEvent.click(screen.getByTestId("media-drivers-all"));
+    expect(screen.getByLabelText(/LAPTOP/)).toBeDisabled();
+    expect(screen.getByLabelText(/LAPTOP/)).toBeChecked();
+
+    await userEvent.click(screen.getByTestId("media-target-iso"));
+    await userEvent.click(screen.getByTestId("build-recovery-media"));
+
+    await waitFor(() => expect(screen.getByText(/it saves the ISO file you chose/)).toBeInTheDocument());
+    expect(screen.getByText(/drivers of every computer/)).toBeInTheDocument();
+    expect(window.kopiaUI.createRecoveryMediaElevated).toHaveBeenCalledWith([], { iso: true, allDrivers: true });
   });
 
   test("builds recovery media with the drivers of the computers chosen", async () => {
@@ -915,7 +941,10 @@ describe("Images page", () => {
     await userEvent.click(screen.getByTestId("build-recovery-media"));
 
     await waitFor(() => expect(screen.getByText(/It adds the drivers of LAPTOP/)).toBeInTheDocument());
-    expect(window.kopiaUI.createRecoveryMediaElevated).toHaveBeenCalledWith(["LAPTOP"]);
+    expect(window.kopiaUI.createRecoveryMediaElevated).toHaveBeenCalledWith(["LAPTOP"], {
+      iso: false,
+      allDrivers: false,
+    });
     expect(screen.queryByTestId("media-driver-hosts")).not.toBeInTheDocument();
   });
 
