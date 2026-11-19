@@ -1001,7 +1001,7 @@ export function RecoveryMediaDialog({ show, onHide, localHost, onBuild }) {
         </Form.Group>
         <p className="text-muted small mb-0">
           {iso
-            ? "You choose where to save the ISO file, then the media is built in a console window. Keep a copy away from the computers it restores."
+            ? "You choose where to save the ISO file, then the media is built in a console window. Write it to a USB stick with Rufus or a similar tool when needed: it does not boot as a DVD or in a virtual machine. Keep a copy away from the computers it restores."
             : "The media is built in a console window, which asks which USB disk to erase."}
         </p>
       </Modal.Body>
