@@ -745,6 +745,29 @@ describe("Images page", () => {
     }
   });
 
+  test("recovers from an error once the server answers again", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    try {
+      // the repository server is restarting
+      axiosMock.onGet("/api/v1/images").replyOnce(500, { error: "timed out waiting for gRPC connection readiness" });
+      axiosMock.onGet("/api/v1/images").reply(200, { images: [image], localHost: "pc", localUsername: "u" });
+      axiosMock.onGet("/api/v1/images/status").reply(200, scheduledStatus());
+      renderImages();
+
+      await waitFor(() => expect(screen.getByTestId("images-error")).toHaveTextContent("gRPC"));
+      expect(screen.getByTestId("images-retry")).toBeInTheDocument();
+
+      // the status is polled, which reads the images again
+      await vi.advanceTimersByTimeAsync(6000);
+
+      await waitFor(() => expect(screen.queryByTestId("images-error")).not.toBeInTheDocument());
+      expect(screen.getByTestId("image-toolbar")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("lists the drivers again when an image run ends", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
 

@@ -245,7 +245,7 @@ function RecoveryMediaHeading({ busy, onCreate }) {
             data-testid="create-recovery-media"
             disabled={busy}
             onClick={onCreate}
-            title="Make a USB stick that restores this computer's disk images; asks for administrator rights"
+            title="Make a USB stick or an ISO file that restores disk images, with the drivers of this or all computers; asks for administrator rights"
           >
             Create Recovery Media...
           </Button>
@@ -991,25 +991,27 @@ export function RecoveryMediaDialog({ show, onHide, localHost, onBuild }) {
         ) : (
           <>
             <p>
-              The media restores {localHost || "this computer"} with its own storage, network and USB drivers.
-              {others.length > 0 && " To restore other computers with it too, add their drivers:"}
+              The media restores {localHost || "this computer"} with its own storage, network and USB drivers. To
+              restore other computers with it too, add their drivers:
             </p>
-            {others.length > 0 ? (
-              <Form.Group className="mb-3" data-testid="media-driver-hosts">
-                <Form.Check
-                  type="checkbox"
-                  id="media-drivers-all"
-                  data-testid="media-drivers-all"
-                  checked={allDrivers}
-                  onChange={(e) => setAllDrivers(e.target.checked)}
-                  label={
-                    <span>
-                      All computers{" "}
-                      <span className="text-muted small">including those whose images store drivers later on</span>
+            <Form.Group className="mb-3" data-testid="media-driver-hosts">
+              <Form.Check
+                type="checkbox"
+                id="media-drivers-all"
+                data-testid="media-drivers-all"
+                checked={allDrivers}
+                onChange={(e) => setAllDrivers(e.target.checked)}
+                label={
+                  <span>
+                    Drivers of all computers{" "}
+                    <span className="text-muted small">
+                      that have an image with drivers in the repository when the media is built
                     </span>
-                  }
-                />
-                {others.map((h) => (
+                  </span>
+                }
+              />
+              {others.length > 0 ? (
+                others.map((h) => (
                   <Form.Check
                     key={h.host}
                     type="checkbox"
@@ -1028,14 +1030,14 @@ export function RecoveryMediaDialog({ show, onHide, localHost, onBuild }) {
                       </span>
                     }
                   />
-                ))}
-              </Form.Group>
-            ) : (
-              <p className="text-muted small" data-testid="media-no-driver-hosts">
-                No image of another computer stores drivers yet: computers store them with every image they create with
-                this version of kopia.
-              </p>
-            )}
+                ))
+              ) : (
+                <p className="text-muted small ms-4 mb-0" data-testid="media-no-driver-hosts">
+                  No image of another computer stores drivers yet: computers store them with every image they create
+                  with this version of kopia.
+                </p>
+              )}
+            </Form.Group>
           </>
         )}
         <Form.Group className="mb-3" data-testid="media-target">
@@ -1248,6 +1250,13 @@ export function Images() {
   const [tab, setTab] = useState("images");
   const lastRunEndRef = useRef(undefined);
   const mediaBuiltRef = useRef(undefined);
+  const failedRef = useRef(false);
+
+  const fail = useCallback((e) => {
+    redirect(e);
+    failedRef.current = true;
+    setError(e);
+  }, []);
 
   // mounted snapshots by root object, to tell which images are mounted
   const fetchMounts = useCallback(() => {
@@ -1264,12 +1273,13 @@ export function Images() {
   const fetchImages = useCallback(() => {
     axios
       .get("/api/v1/images" + (allHosts ? "?all=1" : ""))
-      .then((result) => setImages(result.data))
-      .catch((e) => {
-        redirect(e);
-        setError(e);
-      });
-  }, [allHosts]);
+      .then((result) => {
+        setImages(result.data);
+        failedRef.current = false;
+        setError(null);
+      })
+      .catch(fail);
+  }, [allHosts, fail]);
 
   const fetchStatus = useCallback(() => {
     axios
@@ -1277,9 +1287,11 @@ export function Images() {
       .then((result) => {
         setStatus(result.data);
 
-        // a run that ended added images; the message that it started is done
+        // a run that ended added images; the message that it started is done.
+        // After a failure, such as the repository server restarting, the
+        // images are read again, which clears the error once they are.
         const end = result.data.lastRun?.endTime;
-        if (lastRunEndRef.current !== undefined && end !== lastRunEndRef.current) {
+        if (failedRef.current || (lastRunEndRef.current !== undefined && end !== lastRunEndRef.current)) {
           fetchImages();
           setMessage((m) => (m?.until === "run" ? null : m));
         }
@@ -1292,11 +1304,8 @@ export function Images() {
         }
         mediaBuiltRef.current = built;
       })
-      .catch((e) => {
-        redirect(e);
-        setError(e);
-      });
-  }, [fetchImages]);
+      .catch(fail);
+  }, [fetchImages, fail]);
 
   useEffect(() => {
     fetchImages();
@@ -1563,7 +1572,15 @@ export function Images() {
   };
 
   if (error) {
-    return <Alert variant="danger">{errorText(error)}</Alert>;
+    return (
+      <Alert variant="danger" data-testid="images-error">
+        <p>{errorText(error)}</p>
+        <p className="small mb-2">The page tries again every few seconds.</p>
+        <Button size="sm" variant="secondary" onClick={onRefresh} data-testid="images-retry">
+          <FontAwesomeIcon icon={faSync} /> Retry Now
+        </Button>
+      </Alert>
+    );
   }
 
   if (!images || !status) {
