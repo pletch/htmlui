@@ -184,10 +184,11 @@ describe("Images page", () => {
     }
     expect(screen.getByText("Disk Size")).toBeInTheDocument();
     expect(screen.getByText("New Data")).toBeInTheDocument();
-    expect(screen.getByText("Stored")).toBeInTheDocument();
+    expect(screen.getByText("Uploaded")).toBeInTheDocument();
+    expect(screen.getByText("Freed if Deleted")).toBeInTheDocument();
     expect(screen.getByText("9 GB")).toBeInTheDocument();
     expect(screen.getByText("3 GB")).toBeInTheDocument();
-    expect(screen.getByText(/new data 9 GB, stored 3 GB/)).toBeInTheDocument();
+    expect(screen.getByText(/new data 9 GB, uploaded 3 GB/)).toBeInTheDocument();
     // scheduled tasks: short name over the full path; status and result as pills
     expect(screen.getByText(createTask, { selector: ".source-path" })).toBeInTheDocument();
     expect(screen.getByText("Image create", { selector: ".source-name" })).toBeInTheDocument();
@@ -714,6 +715,34 @@ describe("Images page", () => {
     expect(screen.getByText("on media")).toBeInTheDocument();
     expect(screen.getByText("missing")).toBeInTheDocument();
     expect(screen.getByTestId("driver-inventory-missing")).toHaveTextContent("lacks drivers of laptop");
+  });
+
+  test("shows the space of each disk's images once the server has calculated it", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    try {
+      const list = { images: [image], localHost: "pc", localUsername: "u" };
+
+      axiosMock.onGet("/api/v1/images").replyOnce(200, { ...list, space: [{ source: image.source, pending: true }] });
+      axiosMock.onGet("/api/v1/images").reply(200, {
+        ...list,
+        images: [{ ...image, exclusiveBytes: 7000000000 }],
+        space: [{ source: image.source, storedBytes: 250000000000 }],
+      });
+      axiosMock.onGet("/api/v1/images/status").reply(200, scheduledStatus());
+      renderImages();
+
+      await waitFor(() => expect(screen.getByTestId("image-group-space")).toHaveTextContent("calculating"));
+      expect(screen.getByTestId("image-exclusive-m1")).toHaveTextContent("");
+
+      // the page asks again while the space is calculated
+      await vi.advanceTimersByTimeAsync(6000);
+
+      await waitFor(() => expect(screen.getByTestId("image-group-space")).toHaveTextContent("250 GB on the server"));
+      expect(screen.getByTestId("image-exclusive-m1")).toHaveTextContent("7 GB");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("lists the drivers again when an image run ends", async () => {
