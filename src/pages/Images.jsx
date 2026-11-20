@@ -714,7 +714,7 @@ function SpaceSummary({ space, bytesStringBase2 }) {
  * kopia image is a complete restore point, so a group is the images of one
  * disk, newest first. New Data and Uploaded show what each run added; a
  * group's heading shows what its images take on the server together, and
- * Freed if Deleted what only an image uses.
+ * Unique Data what only an image uses.
  */
 function ImageList({ groups, space, selectedId, onSelect, mounts, showHost, bytesStringBase2 }) {
   const [collapsed, setCollapsed] = useState({});
@@ -734,9 +734,9 @@ function ImageList({ groups, space, selectedId, onSelect, mounts, showHost, byte
           </th>
           <th
             className="col-num"
-            title="What only this image uses, compressed: about what deleting it frees, once maintenance removes data that nothing uses"
+            title="Data that no other image of this disk uses, compressed: about what deleting the image frees, once maintenance removes data that nothing uses"
           >
-            Freed if Deleted
+            Unique Data
           </th>
         </tr>
       </thead>

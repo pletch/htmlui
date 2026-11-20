@@ -185,7 +185,7 @@ describe("Images page", () => {
     expect(screen.getByText("Disk Size")).toBeInTheDocument();
     expect(screen.getByText("New Data")).toBeInTheDocument();
     expect(screen.getByText("Uploaded")).toBeInTheDocument();
-    expect(screen.getByText("Freed if Deleted")).toBeInTheDocument();
+    expect(screen.getByText("Unique Data")).toBeInTheDocument();
     expect(screen.getByText("9 GB")).toBeInTheDocument();
     expect(screen.getByText("3 GB")).toBeInTheDocument();
     expect(screen.getByText(/new data 9 GB, uploaded 3 GB/)).toBeInTheDocument();
