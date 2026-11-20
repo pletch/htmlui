@@ -1247,6 +1247,7 @@ export function Images() {
   const [mounts, setMounts] = useState({});
   const [tab, setTab] = useState("images");
   const lastRunEndRef = useRef(undefined);
+  const mediaBuiltRef = useRef(undefined);
 
   // mounted snapshots by root object, to tell which images are mounted
   const fetchMounts = useCallback(() => {
@@ -1276,12 +1277,20 @@ export function Images() {
       .then((result) => {
         setStatus(result.data);
 
-        // a run that ended added images
+        // a run that ended added images; the message that it started is done
         const end = result.data.lastRun?.endTime;
         if (lastRunEndRef.current !== undefined && end !== lastRunEndRef.current) {
           fetchImages();
+          setMessage((m) => (m?.until === "run" ? null : m));
         }
         lastRunEndRef.current = end;
+
+        // so is the message that media is being built, once it is recorded
+        const built = result.data.recoveryMedia?.builtAt ?? null;
+        if (mediaBuiltRef.current !== undefined && built !== mediaBuiltRef.current) {
+          setMessage((m) => (m?.until === "media" ? null : m));
+        }
+        mediaBuiltRef.current = built;
       })
       .catch((e) => {
         redirect(e);
@@ -1335,6 +1344,7 @@ export function Images() {
         ? { variant: "warning", text: "The administrator prompt was declined, so no image was created." }
         : {
             variant: "success",
+            until: "run",
             text:
               "Creating images of the disks holding " +
               volumes.join(" ") +
@@ -1411,6 +1421,7 @@ export function Images() {
             }
           : {
               variant: "success",
+              until: "media",
               text:
                 (options.iso
                   ? "Building recovery media in a console window: it saves the ISO file you chose."

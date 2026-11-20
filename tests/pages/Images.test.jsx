@@ -863,6 +863,37 @@ describe("Images page", () => {
     expect(axiosMock.history.post).toHaveLength(0);
   });
 
+  test("removes the message that an image run started once it ends", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const before = scheduledStatus();
+      const after = scheduledStatus({ lastRun: { ...before.lastRun, endTime: "2026-11-19T21:00:00Z" } });
+
+      let current = before;
+      axiosMock.onGet("/api/v1/images").reply(200, { images: [image], localHost: "pc", localUsername: "u" });
+      axiosMock.onGet("/api/v1/images/status").reply(() => [200, current]);
+      mockDisks();
+      window.kopiaUI = { createImageElevated: vi.fn().mockResolvedValue("started") };
+      renderImages();
+
+      await waitFor(() => expect(screen.getByTestId("run-image-task")).toBeEnabled());
+      await user.click(screen.getByTestId("run-image-task"));
+      await waitFor(() => expect(screen.getByLabelText(/Disk 3 - NVMe/)).toBeChecked());
+      await user.click(screen.getByTestId("start-image"));
+      await waitFor(() => expect(screen.getByText(/in a console window/)).toBeInTheDocument());
+
+      // a later status poll reports that the run ended
+      current = after;
+      await vi.advanceTimersByTimeAsync(6000);
+
+      await waitFor(() => expect(screen.queryByText(/in a console window/)).not.toBeInTheDocument());
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("creates an image now with a schedule, without its task", async () => {
     mockLists(scheduledStatus());
     mockDisks();
