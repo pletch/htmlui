@@ -214,7 +214,7 @@ function LastRun({ status, bytesStringBase2 }) {
           {run.images.map((img) => (
             <li key={img.snapshotId}>
               {img.source}: read {sizeDisplayName(img.bytesRead, bytesStringBase2)}, new data{" "}
-              {img.newDataBytes === undefined ? "?" : sizeDisplayName(img.newDataBytes, bytesStringBase2)}, stored{" "}
+              {img.newDataBytes === undefined ? "?" : sizeDisplayName(img.newDataBytes, bytesStringBase2)}, uploaded{" "}
               {img.uploadedBytes === undefined ? "?" : sizeDisplayName(img.uploadedBytes, bytesStringBase2)}
             </li>
           ))}
@@ -665,12 +665,58 @@ export function groupImagesByDisk(images) {
   return groups;
 }
 
+/** Finds the repository space of a disk's images in the images response. */
+export function sourceSpace(space, source) {
+  return (space || []).find(
+    (s) => s.source.host === source.host && s.source.userName === source.userName && s.source.path === source.path,
+  );
+}
+
+/** Describes the repository space of a disk's images, for its group heading. */
+function SpaceSummary({ space, bytesStringBase2 }) {
+  if (!space) {
+    return null;
+  }
+
+  if (space.error) {
+    return (
+      <span className="text-muted small" data-testid="image-group-space">
+        {" "}
+        <FontAwesomeIcon icon={faExclamationTriangle} title={"Unable to calculate the space: " + space.error} /> space
+        unknown
+      </span>
+    );
+  }
+
+  if (space.pending) {
+    return (
+      <span className="text-muted small" data-testid="image-group-space">
+        {" "}
+        · calculating the space on the server…
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className="text-muted small"
+      data-testid="image-group-space"
+      title="What these images take in the repository, compressed, counting the data they share once"
+    >
+      {" "}
+      · {sizeDisplayName(space.storedBytes, bytesStringBase2)} on the server
+    </span>
+  );
+}
+
 /**
  * Lists the images grouped by disk, like Macrium Reflect's backup sets. Every
  * kopia image is a complete restore point, so a group is the images of one
- * disk, newest first, and New Data shows what each added.
+ * disk, newest first. New Data and Uploaded show what each run added; a
+ * group's heading shows what its images take on the server together, and
+ * Freed if Deleted what only an image uses.
  */
-function ImageList({ groups, selectedId, onSelect, mounts, showHost, bytesStringBase2 }) {
+function ImageList({ groups, space, selectedId, onSelect, mounts, showHost, bytesStringBase2 }) {
   const [collapsed, setCollapsed] = useState({});
   const size = (v) => (v === undefined ? "" : sizeDisplayName(v, bytesStringBase2));
 
@@ -683,7 +729,15 @@ function ImageList({ groups, selectedId, onSelect, mounts, showHost, bytesString
           <th className="col-num">Disk Size</th>
           <th className="col-num">Read</th>
           <th className="col-num">New Data</th>
-          <th className="col-num">Stored</th>
+          <th className="col-num" title="What the run that created the image uploaded, compressed">
+            Uploaded
+          </th>
+          <th
+            className="col-num"
+            title="What only this image uses, compressed: about what deleting it frees, once maintenance removes data that nothing uses"
+          >
+            Freed if Deleted
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -694,7 +748,7 @@ function ImageList({ groups, selectedId, onSelect, mounts, showHost, bytesString
               onClick={() => setCollapsed({ ...collapsed, [g.key]: !collapsed[g.key] })}
               data-testid="image-group"
             >
-              <td colSpan={6}>
+              <td colSpan={7}>
                 <FontAwesomeIcon icon={collapsed[g.key] ? faChevronRight : faChevronDown} fixedWidth />{" "}
                 <FontAwesomeIcon icon={faHardDrive} />{" "}
                 <span className="image-group-name">{diskDisplayName(g.source)}</span>
@@ -703,6 +757,7 @@ function ImageList({ groups, selectedId, onSelect, mounts, showHost, bytesString
                   {" "}
                   ({g.images.length} {g.images.length === 1 ? "image" : "images"})
                 </span>
+                <SpaceSummary space={sourceSpace(space, g.source)} bytesStringBase2={bytesStringBase2} />
               </td>
             </tr>
             {!collapsed[g.key] &&
@@ -758,6 +813,9 @@ function ImageList({ groups, selectedId, onSelect, mounts, showHost, bytesString
                     <td className="col-num">{size(img.bytesRead)}</td>
                     <td className="col-num">{size(img.newDataBytes)}</td>
                     <td className="col-num">{size(img.uploadedBytes)}</td>
+                    <td className="col-num" data-testid={"image-exclusive-" + img.id}>
+                      {size(img.exclusiveBytes)}
+                    </td>
                   </tr>
                 );
               })}
@@ -1235,6 +1293,18 @@ export function Images() {
     fetchImages();
   }, [fetchImages]);
 
+  // the server calculates the space of the images in the background
+  const spacePending = (images?.space || []).some((s) => s.pending);
+
+  useEffect(() => {
+    if (!spacePending) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(fetchImages, statusRefreshMillis);
+    return () => window.clearTimeout(timer);
+  }, [spacePending, images, fetchImages]);
+
   useEffect(() => {
     fetchStatus();
     const interval = window.setInterval(fetchStatus, statusRefreshMillis);
@@ -1623,6 +1693,7 @@ export function Images() {
           ) : (
             <ImageList
               groups={groups}
+              space={images.space}
               selectedId={selected?.id}
               onSelect={setSelectedId}
               mounts={mounts}
