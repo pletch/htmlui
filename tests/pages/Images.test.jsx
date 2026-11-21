@@ -546,10 +546,10 @@ describe("Images page", () => {
     await waitFor(() => expect(screen.getByTestId("schedule-paused")).toBeInTheDocument());
     expect(screen.getByTestId("schedule-summary")).toHaveTextContent("until the schedule is resumed");
 
-    // a paused task cannot start: the scheduled disks run in a console window
+    // a paused task cannot start: the scheduled disks run in the background
     await userEvent.click(screen.getByTestId("run-image-task"));
     await waitFor(() => expect(screen.getByLabelText(/Disk 3 - NVMe/)).toBeChecked());
-    expect(screen.getByTestId("create-image-how")).toHaveTextContent("console window");
+    expect(screen.getByTestId("create-image-how")).toHaveTextContent("in the background");
     await userEvent.click(screen.getByText("Cancel"));
 
     expect(screen.getByTestId("pause-schedule")).toHaveTextContent("Resume Schedule");
@@ -881,7 +881,7 @@ describe("Images page", () => {
     await waitFor(() => expect(screen.getByLabelText(/Disk 3 - NVMe/)).toBeChecked());
     await userEvent.click(screen.getByTestId("start-image"));
 
-    await waitFor(() => expect(screen.getByText(/in a console window/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/disks holding .* in the background/)).toBeInTheDocument());
     expect(window.kopiaUI.createImageElevated).toHaveBeenCalledWith(["C:"]);
     expect(axiosMock.history.post).toHaveLength(0);
   });
@@ -905,13 +905,13 @@ describe("Images page", () => {
       await user.click(screen.getByTestId("run-image-task"));
       await waitFor(() => expect(screen.getByLabelText(/Disk 3 - NVMe/)).toBeChecked());
       await user.click(screen.getByTestId("start-image"));
-      await waitFor(() => expect(screen.getByText(/in a console window/)).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText(/disks holding .* in the background/)).toBeInTheDocument());
 
       // a later status poll reports that the run ended
       current = after;
       await vi.advanceTimersByTimeAsync(6000);
 
-      await waitFor(() => expect(screen.queryByText(/in a console window/)).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.queryByText(/disks holding .* in the background/)).not.toBeInTheDocument());
     } finally {
       vi.useRealTimers();
     }
@@ -929,9 +929,9 @@ describe("Images page", () => {
     await waitFor(() => expect(screen.getByTestId("run-image-task")).toBeEnabled());
     await userEvent.click(screen.getByTestId("run-image-task"));
 
-    // the scheduled disk at first; the image runs in a console window anyway
+    // the scheduled disk at first; the image runs in the background anyway
     await waitFor(() => expect(screen.getByLabelText(/Disk 3 - NVMe/)).toBeChecked());
-    expect(screen.getByTestId("create-image-how")).toHaveTextContent("console window");
+    expect(screen.getByTestId("create-image-how")).toHaveTextContent("in the background");
     expect(screen.getByTestId("create-image-how")).toHaveTextContent("A schedule, if any, is not affected");
 
     await userEvent.click(screen.getByTestId("start-image"));

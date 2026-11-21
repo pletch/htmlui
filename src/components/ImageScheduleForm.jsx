@@ -331,8 +331,8 @@ ImageScheduleForm.propTypes = {
 
 /**
  * Creates images now, whether or not images are scheduled: in KopiaUI, after
- * the UAC prompt, kopia image create runs in a console window that shows its
- * progress; in a browser the dialog shows the command to run instead. The
+ * the UAC prompt, kopia image create runs in the background and the page shows
+ * its progress; in a browser the dialog shows the command to run instead. The
  * disks of the schedule, if any, are chosen at first, else the Windows disk.
  *
  * onStart(volumes) returns a promise of the message to show: a success
@@ -374,8 +374,8 @@ export function CreateImageDialog({ show, onHide, scheduledVolumes, onStart }) {
           <DiskChecks disks={disks} volumes={volumes} onChange={setChosenVolumes} />
         </Form.Group>
         <p className="text-muted small mb-0" data-testid="create-image-how">
-          The image is created now, in a console window that shows its progress; closing the window or signing out stops
-          it. A schedule, if any, is not affected.
+          The image is created now, in the background: its progress shows on this page, where Stop ends it, as does
+          signing out. A schedule, if any, is not affected.
         </p>
         {!canStart && (
           <Alert variant="info" className="mt-3">

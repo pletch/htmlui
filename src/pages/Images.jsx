@@ -1345,8 +1345,8 @@ export function Images() {
 
   const onRun = () => setCreating(true);
 
-  // an image now never depends on the schedule: kopia image create runs in a
-  // console window, whether images are scheduled, paused or not at all
+  // an image now never depends on the schedule: kopia image create runs in
+  // the background, whether images are scheduled, paused or not at all
   const startImage = (volumes) => {
     const started = window.kopiaUI.createImageElevated(volumes).then((result) =>
       result === "canceled"
@@ -1357,7 +1357,7 @@ export function Images() {
             text:
               "Creating images of the disks holding " +
               volumes.join(" ") +
-              " in a console window, which shows the progress; closing it stops the run. The result shows here when it ends.",
+              " in the background. The progress shows here, where Stop ends the run, and so does the result when it ends.",
           },
     );
 
