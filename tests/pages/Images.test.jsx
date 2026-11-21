@@ -1154,7 +1154,7 @@ describe("Images page", () => {
     expect(screen.queryByText("stopped by request")).not.toBeInTheDocument();
   });
 
-  test("tells when an image started from the page did not run", async () => {
+  test("tells when an image started from the page failed", async () => {
     mockLists(
       scheduledStatus({
         lastRequest: {
@@ -1169,6 +1169,19 @@ describe("Images page", () => {
     renderImages();
 
     await waitFor(() => expect(screen.getByTestId("image-failed-start")).toHaveTextContent("invalid password"));
+  });
+
+  test("hides a failed image while another runs", async () => {
+    mockLists(
+      scheduledStatus({
+        lastRequest: { id: "r", operation: "create", time: "2026-11-21T09:00:00Z", success: false, error: "EOF" },
+        progress: runningProgress,
+      }),
+    );
+    renderImages();
+
+    await waitFor(() => expect(screen.getByText("kopia image stop")).toBeInTheDocument());
+    expect(screen.queryByTestId("image-failed-start")).not.toBeInTheDocument();
   });
 
   test("forgets a failed start once a later image ran", async () => {

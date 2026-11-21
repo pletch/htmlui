@@ -452,14 +452,17 @@ function FailedStart({ status }) {
     return null;
   }
 
-  // a later run replaced it
-  if (status.lastRun && new Date(status.lastRun.startTime) > new Date(req.time)) {
+  // a later run replaced it, or one is in progress, whose progress shows
+  // instead
+  const later = (time) => time && new Date(time) > new Date(req.time);
+
+  if (status.progress || later(status.lastRun?.startTime)) {
     return null;
   }
 
   return (
     <Alert variant="danger" data-testid="image-failed-start">
-      The image started <span title={moment(req.time).toLocaleString()}>{moment(req.time).fromNow()}</span> did not run:{" "}
+      The image started <span title={moment(req.time).toLocaleString()}>{moment(req.time).fromNow()}</span> failed:{" "}
       {req.error}
     </Alert>
   );
