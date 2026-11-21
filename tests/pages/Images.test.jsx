@@ -1135,6 +1135,37 @@ describe("Images page", () => {
     expect(screen.getByTestId("stop-image")).toBeDisabled();
   });
 
+  test("tells when a partition's chunks are being checked", async () => {
+    mockLists(
+      scheduledStatus({
+        progress: {
+          ...runningProgress,
+          bytesDone: 990000000000,
+          checking: true,
+          chunksToCheck: 200000,
+          chunksChecked: 41500,
+        },
+      }),
+    );
+    renderImages();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("image-progress-checking")).toHaveTextContent(
+        `p3-C.img is read; saving what was uploaded and checking that the repository holds every chunk: ${(41500).toLocaleString()} of ${(200000).toLocaleString()} checked.`,
+      ),
+    );
+    expect(screen.getByTestId("image-progress-details")).not.toHaveTextContent("left");
+  });
+
+  test("tells a partition is being saved before its chunks are listed", async () => {
+    mockLists(scheduledStatus({ progress: { ...runningProgress, checking: true } }));
+    renderImages();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("image-progress-checking")).toHaveTextContent(/holds every chunk\.$/),
+    );
+  });
+
   test("in a browser, tells how to stop the image", async () => {
     mockLists(scheduledStatus({ progress: runningProgress }));
     renderImages();

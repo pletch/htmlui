@@ -432,11 +432,24 @@ function RunProgress({ progress, bytesStringBase2, busy, onStop }) {
       </Row>
       <ProgressBar now={percent} label={percent + "%"} animated={!progress.stopping} data-testid="image-progress-bar" />
       <div className="small mt-2" data-testid="image-progress-details">
+        {progress.checking ? (
+          <span data-testid="image-progress-checking">
+            {progress.partitionName || "The partition"} is read; saving what was uploaded and checking that the
+            repository holds every chunk
+            {progress.chunksToCheck > 0 &&
+              ": " +
+                (progress.chunksChecked || 0).toLocaleString() +
+                " of " +
+                progress.chunksToCheck.toLocaleString() +
+                " checked"}
+            .{" "}
+          </span>
+        ) : null}
         {sizeDisplayName(progress.bytesDone, bytesStringBase2)} of{" "}
         {sizeDisplayName(progress.bytesTotal, bytesStringBase2)} of this disk done,{" "}
         {sizeDisplayName(progress.uploadedBytes || 0, bytesStringBase2)} uploaded; started{" "}
         {moment(progress.startTime).fromNow()}
-        {remaining && !progress.stopping && ", about " + remaining + " left"}.
+        {remaining && !progress.stopping && !progress.checking && ", about " + remaining + " left"}.
       </div>
     </Alert>
   );
