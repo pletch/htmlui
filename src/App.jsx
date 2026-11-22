@@ -6,14 +6,7 @@ import axios from "axios";
 import { React, Component } from "react";
 import { Container } from "react-bootstrap";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faCamera,
-  faDatabase,
-  faGear,
-  faHardDrive,
-  faListCheck,
-  faShieldHalved,
-} from "@fortawesome/free-solid-svg-icons";
+import { faCamera, faDatabase, faGear, faHardDrive, faListCheck } from "@fortawesome/free-solid-svg-icons";
 import { BrowserRouter as Router, NavLink, Navigate, Route, Routes } from "react-router";
 import { Images } from "./pages/Images";
 import { Policy } from "./pages/Policy";
@@ -34,7 +27,6 @@ import { RepositorySelector } from "./components/RepositorySelector";
 const SIDEBAR_ITEMS = [
   { to: "/snapshots", label: "File Snapshots", testid: "tab-snapshots", icon: faCamera, needsRepository: true },
   { to: "/images", label: "Disk Images", testid: "tab-images", icon: faHardDrive, needsRepository: true },
-  { to: "/policies", label: "Policies", testid: "tab-policies", icon: faShieldHalved, needsRepository: true },
   { to: "/tasks", label: "Tasks", testid: "tab-tasks", icon: faListCheck, needsRepository: true },
   { to: "/repo", label: "Repository", testid: "tab-repo", icon: faDatabase, needsRepository: false },
   { to: "/preferences", label: "Preferences", testid: "tab-preferences", icon: faGear, needsRepository: false },

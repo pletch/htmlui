@@ -18,7 +18,7 @@ import { FileSnapshotSettings, fileSettingsTabs } from "../components/FileSnapsh
 import KopiaTable from "../components/KopiaTable";
 import { baseName, compare, formatOwnerName, sizeDisplayName } from "../utils/formatutils";
 import { errorAlert, redirect, newDataBytesCell, snapshotSizeCell, uploadedBytesCell } from "../utils/uiutil";
-import { policyEditorURL, sourceQueryStringParams } from "../utils/policyutil";
+import { folderPolicyURL, sourceQueryStringParams } from "../utils/policyutil";
 import { CLIEquivalent } from "../components/CLIEquivalent";
 import { UIPreferencesContext } from "../contexts/UIPreferencesContext";
 import { isImageSource } from "../utils/imageutil";
@@ -184,7 +184,7 @@ export class Snapshots extends Component {
             <Button
               data-testid="edit-policy"
               as={Link}
-              to={policyEditorURL(x.row.original.source)}
+              to={folderPolicyURL(x.row.original.source)}
               variant="primary"
               size="sm"
             >

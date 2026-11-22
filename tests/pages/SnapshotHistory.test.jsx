@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { SnapshotHistory } from "../../src/pages/SnapshotHistory";
 import { BrowserRouter } from "react-router";
 import axios from "axios";
@@ -10,6 +10,15 @@ import { mockNavigate, resetRouterMocks } from "../testutils/react-router-mock.j
 
 // Mock axios
 vi.mock("axios");
+
+// The policy editor has tests of its own.
+vi.mock("../../src/components/policy-editor/PolicyEditor", () => ({
+  PolicyEditor: ({ userName, host, path }) => (
+    <div data-testid="policy-editor">
+      {userName}@{host}:{path}
+    </div>
+  ),
+}));
 
 // Mock react-router using the unified helper with custom location
 vi.mock("react-router", async () => {
@@ -574,5 +583,38 @@ describe("SnapshotHistory", () => {
 
       // This test will fail until we add proper null checks for pins
     });
+  });
+});
+
+describe("SnapshotHistory tabs", () => {
+  beforeEach(() => {
+    resetRouterMocks();
+    vi.clearAllMocks();
+    axios.get.mockReset();
+    axios.get.mockResolvedValue({ data: { snapshots: [], unfilteredCount: 0, uniqueCount: 0 } });
+  });
+
+  afterEach(() => {
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("edits the folder's policy on its Policy tab", async () => {
+    renderWithProviders(<SnapshotHistory />);
+
+    await screen.findByText(/snapshots of/);
+    expect(screen.queryByTestId("policy-editor")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Policy" }));
+
+    expect(screen.getByTestId("policy-editor")).toHaveTextContent("testuser@testhost:/test/path");
+    expect(screen.getByTestId("folder-policy-scope")).toHaveTextContent("apply to this folder only");
+  });
+
+  it("opens the Policy tab the URL asks for", async () => {
+    window.history.replaceState({}, "", "/snapshots/single-source?tab=policy");
+
+    renderWithProviders(<SnapshotHistory />);
+
+    expect(await screen.findByTestId("policy-editor")).toBeInTheDocument();
   });
 });

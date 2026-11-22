@@ -137,7 +137,7 @@ describe("App Component - Navigation", () => {
     await renderAndWait(<App />);
 
     expect(screen.getByTestId("tab-snapshots")).toBeInTheDocument();
-    expect(screen.getByTestId("tab-policies")).toBeInTheDocument();
+    expect(screen.getByTestId("tab-images")).toBeInTheDocument();
     expect(screen.getByTestId("tab-tasks")).toBeInTheDocument();
     expect(screen.getByTestId("tab-repo")).toBeInTheDocument();
     expect(screen.getByTestId("tab-preferences")).toBeInTheDocument();
@@ -152,12 +152,10 @@ describe("App Component - Navigation", () => {
     expect(snapshotsTab).toHaveAttribute("href", "/snapshots");
   });
 
-  test("navigates to policies page when clicking policies tab", async () => {
+  test("has no policies tab: policies are edited on the pages they apply to", async () => {
     await renderAndWait(<App />);
 
-    const policiesTab = screen.getByTestId("tab-policies");
-    expect(policiesTab).toBeInTheDocument();
-    expect(policiesTab).toHaveAttribute("href", "/policies");
+    expect(screen.queryByTestId("tab-policies")).not.toBeInTheDocument();
   });
 
   test("navigates to tasks page when clicking tasks tab", async () => {
@@ -214,7 +212,7 @@ describe("App Component - Repository State", () => {
     await renderAndWait(<App />);
 
     expect(screen.getByTestId("tab-snapshots").className).toContain("disabled");
-    expect(screen.getByTestId("tab-policies").className).toContain("disabled");
+    expect(screen.getByTestId("tab-images").className).toContain("disabled");
     expect(screen.getByTestId("tab-tasks").className).toContain("disabled");
   });
 

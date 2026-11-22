@@ -110,6 +110,10 @@ export function RepositoryDefaults() {
         These apply to both the file snapshots and the disk images of that computer, before the defaults above.
       </p>
       <ComputerOverrides />
+      <p className="text-muted">
+        Every policy, including the ones of single folders and disks, is listed on the{" "}
+        <Link to="/policies">All Policies</Link> page.
+      </p>
     </>
   );
 }

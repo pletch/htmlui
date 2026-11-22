@@ -3,6 +3,7 @@ import {
   checkPolicyPath,
   sourceQueryStringParams,
   PolicyTypeName,
+  folderPolicyURL,
   policyEditorURL,
 } from "../../src/utils/policyutil";
 
@@ -166,6 +167,14 @@ describe("PolicyTypeName", () => {
       path: "/path with spaces",
     };
     expect(PolicyTypeName(source)).toBe("Directory: user@domain@host-with-dashes:/path with spaces");
+  });
+});
+
+describe("folderPolicyURL", () => {
+  it("opens the Policy tab of the folder's page", () => {
+    expect(folderPolicyURL({ userName: "u", host: "h", path: "/a b" })).toBe(
+      "/snapshots/single-source?userName=u&host=h&path=%2Fa%20b&tab=policy",
+    );
   });
 });
 

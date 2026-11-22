@@ -1,6 +1,5 @@
 import React from "react";
 import PropTypes from "prop-types";
-import { Link } from "react-router";
 import { PolicyEditor } from "./policy-editor/PolicyEditor";
 
 /**
@@ -22,7 +21,7 @@ export function FileSnapshotSettings({ sections }) {
     <>
       <p data-testid="file-settings-scope">
         These settings apply to the file snapshots of every computer that uses this repository; disk images do not use
-        them. A computer or a folder can override them on the <Link to="/policies">Policies</Link> page.
+        them. To use different settings for one folder, open it from the Snapshots tab and use its Policy tab.
       </p>
       <PolicyEditor userName="" host="" path="" sections={sections} />
     </>

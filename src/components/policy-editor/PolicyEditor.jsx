@@ -245,7 +245,7 @@ export class PolicyEditor extends Component {
             this.props.close();
           } else {
             // shown in place, as a tab of another page: stay and say so
-            this.setState({ saving: false, savedMessage: "Saved." });
+            this.setState({ saving: false, savedMessage: "Saved.", isNew: false });
           }
         })
         .catch((error) => {
@@ -265,7 +265,13 @@ export class PolicyEditor extends Component {
       axios
         .delete(this.policyURL(this.props))
         .then((_result) => {
-          this.props.close();
+          if (this.props.close) {
+            this.props.close();
+          } else {
+            // shown in place: show the settings it now inherits
+            this.setState({ saving: false });
+            this.fetchPolicy(this.props);
+          }
         })
         .catch((error) => {
           this.setState({ saving: false });

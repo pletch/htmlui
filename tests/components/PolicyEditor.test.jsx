@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { render, waitFor } from "@testing-library/react";
 import React from "react";
 import { PolicyEditor } from "../../src/components/policy-editor/PolicyEditor";
@@ -180,4 +181,40 @@ it("shows only the given sections and stays open after saving", async () => {
     scheduling: { intervalSeconds: 3600 },
   });
   await waitFor(() => expect(getByTestId("policy-saved")).toHaveTextContent("Saved."));
+});
+
+it("saves and deletes a folder policy in place", async () => {
+  const folderURL = "/api/v1/policy?userName=u&host=h&path=%2Fdata";
+  let exists = false;
+
+  serverMock.onGet(folderURL).reply(() => (exists ? [200, { retention: {} }] : [404, { code: "NOT_FOUND" }]));
+  serverMock.onPost(/\/api\/v1\/policy\/resolve/).reply(200, { effective: {}, definition: {} });
+  serverMock.onPut(folderURL).reply(() => {
+    exists = true;
+    return [200, {}];
+  });
+  serverMock.onDelete(folderURL).reply(() => {
+    exists = false;
+    return [200, {}];
+  });
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+  const { findByText, getByTestId, queryByText } = render(
+    <MemoryRouter>
+      <PolicyEditor host="h" userName="u" path="/data" />
+    </MemoryRouter>,
+  );
+
+  await findByText("Scheduling");
+  // a new policy has nothing to delete
+  expect(queryByText("Delete Policy")).toBeNull();
+
+  fireEvent.click(getByTestId("button-save"));
+  await waitFor(() => expect(getByTestId("policy-saved")).toHaveTextContent("Saved."));
+
+  fireEvent.click(await findByText("Delete Policy"));
+
+  await waitFor(() => expect(serverMock.history.delete.length).toEqual(1));
+  await waitFor(() => expect(queryByText("Delete Policy")).toBeNull());
+  confirm.mockRestore();
 });

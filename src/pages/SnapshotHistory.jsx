@@ -7,9 +7,12 @@ import Row from "react-bootstrap/Row";
 import Button from "react-bootstrap/Button";
 import Col from "react-bootstrap/Col";
 import Spinner from "react-bootstrap/Spinner";
+import Tab from "react-bootstrap/Tab";
+import Tabs from "react-bootstrap/Tabs";
 import { Link, useNavigate, useLocation } from "react-router";
 import KopiaTable from "../components/KopiaTable";
 import { CLIEquivalent } from "../components/CLIEquivalent";
+import { PolicyEditor } from "../components/policy-editor/PolicyEditor";
 import { compare, objectLink, parseQuery, rfc3339TimestampForDisplay } from "../utils/formatutils";
 import { errorAlert, redirect, newDataBytesCell, snapshotSizeCell, uploadedBytesCell } from "../utils/uiutil";
 import { sourceQueryStringParams } from "../utils/policyutil";
@@ -20,6 +23,31 @@ import Modal from "react-bootstrap/Modal";
 import { faFileAlt } from "@fortawesome/free-regular-svg-icons";
 import { UIPreferencesContext } from "../contexts/UIPreferencesContext";
 import PropTypes from "prop-types";
+
+/** Returns the tab the URL asks for: "policy", or the snapshot list. */
+export function initialFolderTab() {
+  return new URLSearchParams(window.location.search).get("tab") === "policy" ? "policy" : "snapshots";
+}
+
+/** Edits the policy of one folder, in place. */
+function FolderPolicy({ source }) {
+  const name = source.userName + "@" + source.host + ":" + source.path;
+
+  return (
+    <>
+      <p data-testid="folder-policy-scope">
+        Settings set here apply to this folder only. Empty settings are inherited from this computer&apos;s settings and
+        the ones on the <Link to="/snapshots?tab=backup">File Snapshots</Link> tabs.
+      </p>
+      <PolicyEditor userName={source.userName} host={source.host} path={source.path} />
+      <CLIEquivalent command={`policy set "${name}"`} />
+    </>
+  );
+}
+
+FolderPolicy.propTypes = {
+  source: PropTypes.object.isRequired,
+};
 
 function pillVariant(tag) {
   if (tag.startsWith("latest-")) {
@@ -50,6 +78,8 @@ class SnapshotHistoryInternal extends Component {
       isRefreshing: false,
       error: null,
       selectedSnapshotManifestIDs: {},
+      // the open tab; links can open the policy with &tab=policy
+      tab: initialFolderTab(),
     };
 
     this.fetchSnapshots = this.fetchSnapshots.bind(this);
@@ -343,8 +373,103 @@ class SnapshotHistoryInternal extends Component {
       });
   }
 
+  renderList(columns, selectedElements) {
+    const { snapshots, unfilteredCount, uniqueCount } = this.state;
+
+    return (
+      <>
+        <Row>
+          <Col>
+            {snapshots.length > 0 &&
+              (selectedElements.length < snapshots.length ? (
+                <Button size="sm" variant="primary" onClick={this.selectAll}>
+                  Select All
+                </Button>
+              ) : (
+                <Button size="sm" variant="primary" onClick={this.deselectAll}>
+                  Deselect All
+                </Button>
+              ))}
+            &nbsp;
+            {selectedElements.length > 0 && (
+              <>
+                &nbsp;
+                <Button size="sm" variant="danger" onClick={this.showDeleteConfirm}>
+                  Delete Selected ({selectedElements.length})
+                </Button>
+              </>
+            )}
+            {snapshots.length === 0 && (
+              <>
+                &nbsp;
+                <Button size="sm" variant="danger" onClick={this.deleteSnapshotSource}>
+                  Delete Snapshot Source
+                </Button>
+              </>
+            )}
+          </Col>
+          <Col></Col>
+          <Col xs="auto">
+            <Button
+              size="sm"
+              variant="primary"
+              title="Fetch snapshots"
+              onClick={this.fetchSnapshots}
+              disabled={this.state.isRefreshing}
+            >
+              {this.state.isRefreshing ? (
+                <Spinner animation="border" variant="light" size="sm" />
+              ) : (
+                <FontAwesomeIcon icon={faSync} />
+              )}
+            </Button>
+          </Col>
+        </Row>
+        <Row>
+          <Col>
+            <div className="vpadded">
+              Displaying{" "}
+              {snapshots.length !== unfilteredCount
+                ? snapshots.length + " out of " + unfilteredCount
+                : snapshots.length}{" "}
+              snapshots of&nbsp;
+              <b>
+                {this.state.userName}@{this.state.host}:{this.state.path}
+              </b>
+            </div>
+          </Col>
+        </Row>
+        {unfilteredCount !== uniqueCount && (
+          <Row>
+            <Col>
+              <div className="vpadded">
+                <Form.Group controlId="formBasicCheckbox">
+                  <Form.Check
+                    type="checkbox"
+                    checked={this.state.showHidden}
+                    label={"Show " + unfilteredCount + " individual snapshots"}
+                    onChange={this.toggleShowHidden}
+                  />
+                </Form.Group>
+              </div>
+            </Col>
+          </Row>
+        )}
+        <Row>
+          <Col xs={12}>
+            <KopiaTable data={snapshots} columns={columns} />
+          </Col>
+        </Row>
+
+        <CLIEquivalent
+          command={`snapshot list "${this.state.userName}@${this.state.host}:${this.state.path}"${this.state.showHidden ? " --show-identical" : ""}`}
+        />
+      </>
+    );
+  }
+
   render() {
-    let { snapshots, unfilteredCount, uniqueCount, isLoading, error } = this.state;
+    let { snapshots, isLoading, error } = this.state;
     const { bytesStringBase2 } = this.context;
     if (error) {
       return <p>{error.message}</p>;
@@ -467,96 +592,30 @@ class SnapshotHistoryInternal extends Component {
 
     const selectedElements = Object.keys(this.state.selectedSnapshotManifestIDs);
 
+    const source = parseQuery(this.props.location.search);
+
     return (
       <>
-        <Row>
-          <Col>
-            <GoBackButton />
-            &nbsp;
-            {snapshots.length > 0 &&
-              (selectedElements.length < snapshots.length ? (
-                <Button size="sm" variant="primary" onClick={this.selectAll}>
-                  Select All
-                </Button>
-              ) : (
-                <Button size="sm" variant="primary" onClick={this.deselectAll}>
-                  Deselect All
-                </Button>
-              ))}
-            &nbsp;
-            {selectedElements.length > 0 && (
-              <>
-                &nbsp;
-                <Button size="sm" variant="danger" onClick={this.showDeleteConfirm}>
-                  Delete Selected ({selectedElements.length})
-                </Button>
-              </>
-            )}
-            {snapshots.length === 0 && (
-              <>
-                &nbsp;
-                <Button size="sm" variant="danger" onClick={this.deleteSnapshotSource}>
-                  Delete Snapshot Source
-                </Button>
-              </>
-            )}
-          </Col>
-          <Col></Col>
-          <Col xs="auto">
-            <Button
-              size="sm"
-              variant="primary"
-              title="Fetch snapshots"
-              onClick={this.fetchSnapshots}
-              disabled={this.state.isRefreshing}
-            >
-              {this.state.isRefreshing ? (
-                <Spinner animation="border" variant="light" size="sm" />
-              ) : (
-                <FontAwesomeIcon icon={faSync} />
-              )}
-            </Button>
-          </Col>
-        </Row>
-        <Row>
-          <Col>
-            <div className="vpadded">
-              Displaying{" "}
-              {snapshots.length !== unfilteredCount
-                ? snapshots.length + " out of " + unfilteredCount
-                : snapshots.length}{" "}
-              snapshots of&nbsp;
-              <b>
-                {this.state.userName}@{this.state.host}:{this.state.path}
-              </b>
-            </div>
-          </Col>
-        </Row>
-        {unfilteredCount !== uniqueCount && (
-          <Row>
-            <Col>
-              <div className="vpadded">
-                <Form.Group controlId="formBasicCheckbox">
-                  <Form.Check
-                    type="checkbox"
-                    checked={this.state.showHidden}
-                    label={"Show " + unfilteredCount + " individual snapshots"}
-                    onChange={this.toggleShowHidden}
-                  />
-                </Form.Group>
-              </div>
-            </Col>
-          </Row>
-        )}
-        <Row>
-          <Col xs={12}>
-            <KopiaTable data={snapshots} columns={columns} />
-          </Col>
-        </Row>
-
-        <CLIEquivalent
-          command={`snapshot list "${this.state.userName}@${this.state.host}:${this.state.path}"${this.state.showHidden ? " --show-identical" : ""}`}
-        />
+        <h4>
+          <GoBackButton />
+          &nbsp;&nbsp;{source.path}
+        </h4>
+        <Tabs
+          activeKey={this.state.tab}
+          onSelect={(k) => this.setState({ tab: k || "snapshots" })}
+          className="mb-3"
+          mountOnEnter
+          // the policy is read again each time its tab opens
+          unmountOnExit
+          data-testid="folder-tabs"
+        >
+          <Tab eventKey="snapshots" title="Snapshots">
+            {this.renderList(columns, selectedElements)}
+          </Tab>
+          <Tab eventKey="policy" title="Policy">
+            <FolderPolicy source={source} />
+          </Tab>
+        </Tabs>
 
         <Modal show={this.state.showDeleteConfirmationDialog} onHide={this.cancelDelete}>
           <Modal.Header closeButton>

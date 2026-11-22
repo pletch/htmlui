@@ -80,3 +80,8 @@ export function sourceQueryStringParams(src) {
 export function policyEditorURL(s) {
   return "/policies/edit?" + sourceQueryStringParams(s);
 }
+
+/** Returns the URL of the Policy tab of a folder's page. */
+export function folderPolicyURL(s) {
+  return "/snapshots/single-source?" + sourceQueryStringParams(s) + "&tab=policy";
+}

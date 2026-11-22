@@ -9,7 +9,7 @@ import { RetentionEditor } from "./RetentionEditor";
 import { retentionSummary } from "./RepositoryDefaults";
 import { compare } from "../utils/formatutils";
 import { isImageSource } from "../utils/imageutil";
-import { policyEditorURL } from "../utils/policyutil";
+import { folderPolicyURL } from "../utils/policyutil";
 
 /** Returns the policies of the folders of one user@host that set their own retention, sorted by path. */
 export function folderRetentionPolicies(policies, userName, host) {
@@ -70,7 +70,7 @@ function FolderOverrides({ userName, host }) {
             <td>{p.target.path}</td>
             <td>{retentionSummary(p.policy)}</td>
             <td>
-              <Link to={policyEditorURL(p.target)}>Edit</Link>
+              <Link to={folderPolicyURL(p.target)}>Edit</Link>
             </td>
           </tr>
         ))}
