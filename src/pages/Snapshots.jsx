@@ -10,7 +10,11 @@ import Dropdown from "react-bootstrap/Dropdown";
 import Row from "react-bootstrap/Row";
 import ProgressBar from "react-bootstrap/ProgressBar";
 import Spinner from "react-bootstrap/Spinner";
+import Tab from "react-bootstrap/Tab";
+import Tabs from "react-bootstrap/Tabs";
 import { Link } from "react-router";
+import { FileRetention } from "../components/FileRetention";
+import { FileSnapshotSettings, fileSettingsTabs } from "../components/FileSnapshotSettings";
 import KopiaTable from "../components/KopiaTable";
 import { baseName, compare, formatOwnerName, sizeDisplayName } from "../utils/formatutils";
 import { errorAlert, redirect, newDataBytesCell, snapshotSizeCell, uploadedBytesCell } from "../utils/uiutil";
@@ -21,6 +25,12 @@ import { isImageSource } from "../utils/imageutil";
 
 const localSnapshots = "Local Snapshots";
 const allSnapshots = "All Snapshots";
+
+/** Returns the tab the URL asks for, or the snapshot list. */
+export function initialTab() {
+  const t = new URLSearchParams(window.location.search).get("tab");
+  return fileSettingsTabs.some((x) => x.key === t) ? t : "snapshots";
+}
 
 /**
  * Shows a source as its folder name with the full path, and the owner when
@@ -52,9 +62,14 @@ export class Snapshots extends Component {
       error: null,
 
       localSourceName: "",
+      localUsername: "",
+      localHost: "",
       multiUser: false,
       selectedOwner: null,
       selectedDirectory: "",
+
+      // the open tab; links can open another with /snapshots?tab=<key>
+      tab: initialTab(),
     };
 
     this.sync = this.sync.bind(this);
@@ -89,6 +104,8 @@ export class Snapshots extends Component {
         .then((result) => {
           this.setState({
             localSourceName: result.data.localUsername + "@" + result.data.localHost,
+            localUsername: result.data.localUsername,
+            localHost: result.data.localHost,
             multiUser: result.data.multiUser,
             sources: result.data.sources,
             isLoading: false,
@@ -313,7 +330,39 @@ export class Snapshots extends Component {
     );
   }
 
+  renderRetention() {
+    if (!this.state.localHost) {
+      return <Spinner animation="border" variant="primary" />;
+    }
+
+    return <FileRetention userName={this.state.localUsername} host={this.state.localHost} />;
+  }
+
   render() {
+    return (
+      <Tabs
+        activeKey={this.state.tab}
+        onSelect={(k) => this.setState({ tab: k || "snapshots" })}
+        className="mb-3"
+        mountOnEnter
+        // a settings tab reads the policy again each time it opens, so that
+        // saving one tab never writes back what another tab read before
+        unmountOnExit
+        data-testid="snapshot-tabs"
+      >
+        <Tab eventKey="snapshots" title="Snapshots">
+          {this.renderList()}
+        </Tab>
+        {fileSettingsTabs.map((t) => (
+          <Tab key={t.key} eventKey={t.key} title={t.title}>
+            {t.sections ? <FileSnapshotSettings sections={t.sections} /> : this.renderRetention()}
+          </Tab>
+        ))}
+      </Tabs>
+    );
+  }
+
+  renderList() {
     let { sources, isLoading, error } = this.state;
     const { bytesStringBase2 } = this.context;
     if (error) {

@@ -1244,6 +1244,14 @@ export function ImageFiles({ image, bytesStringBase2, busy, onBrowse }) {
   );
 }
 
+const imageTabs = ["images", "files", "schedule", "retention", "media", "drivers"];
+
+/** Returns the tab the URL asks for, or the image list. */
+export function initialImageTab() {
+  const t = new URLSearchParams(window.location.search).get("tab");
+  return imageTabs.includes(t) ? t : "images";
+}
+
 /**
  * Lists the disk images in the repository and, on Windows, the scheduled
  * image tasks, the last image run and the recovery media of the computer the
@@ -1263,7 +1271,8 @@ export function Images() {
   const [selectedId, setSelectedId] = useState(null);
   const [diskFilter, setDiskFilter] = useState("");
   const [mounts, setMounts] = useState({});
-  const [tab, setTab] = useState("images");
+  // links can open a tab with /images?tab=<key>
+  const [tab, setTab] = useState(initialImageTab);
   const lastRunEndRef = useRef(undefined);
   const mediaBuiltRef = useRef(undefined);
   const failedRef = useRef(false);

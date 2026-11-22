@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router";
 import { setupAPIMock } from "../testutils/api-mocks";
 import moment from "moment";
 import { fireEvent } from "@testing-library/react";
+import "@testing-library/jest-dom";
 
 // Mockup for the server
 let serverMock;
@@ -147,4 +148,36 @@ it("e2e", async () => {
   fireEvent.click(getByTestId("button-save"));
   await waitFor(() => expect(serverMock.history.put.length).toEqual(1));
   await waitFor(() => expect(closeCalled).toEqual(1));
+});
+
+it("shows only the given sections and stays open after saving", async () => {
+  const globalURL = "/api/v1/policy?userName=&host=&path=";
+
+  serverMock.onGet(globalURL).reply(200, { retention: { keepLatest: 10 }, scheduling: { intervalSeconds: 3600 } });
+  serverMock.onPost(/\/api\/v1\/policy\/resolve/).reply(200, { effective: {}, definition: {} });
+  serverMock.onPut(globalURL).reply(200, {});
+
+  const { findByText, getByTestId, queryByText, getAllByRole } = render(
+    <MemoryRouter>
+      <PolicyEditor host="" userName="" path="" sections={["scheduling", "files"]} />
+    </MemoryRouter>,
+  );
+
+  await findByText("Scheduling");
+
+  // in the order given, without the others
+  const headers = getAllByRole("button")
+    .map((b) => b.textContent.trim())
+    .filter((t) => ["Scheduling", "Files", "Compression", "Snapshot Retention"].includes(t));
+  expect(headers).toEqual(["Scheduling", "Files"]);
+  expect(queryByText("Delete Policy")).toBeNull();
+
+  fireEvent.click(getByTestId("button-save"));
+
+  await waitFor(() => expect(serverMock.history.put.length).toEqual(1));
+  expect(JSON.parse(serverMock.history.put[0].data)).toEqual({
+    retention: { keepLatest: 10 },
+    scheduling: { intervalSeconds: 3600 },
+  });
+  await waitFor(() => expect(getByTestId("policy-saved")).toHaveTextContent("Saved."));
 });

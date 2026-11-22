@@ -7,6 +7,7 @@ import "@testing-library/jest-dom";
 import {
   Images,
   diskDisplayName,
+  initialImageTab,
   progressFraction,
   taskResultDisplayName,
   taskResultVariant,
@@ -1229,6 +1230,15 @@ describe("Images page", () => {
 });
 
 describe("Images helpers", () => {
+  test("initialImageTab", () => {
+    window.history.replaceState({}, "", "/images?tab=retention");
+    expect(initialImageTab()).toBe("retention");
+    window.history.replaceState({}, "", "/images?tab=bogus");
+    expect(initialImageTab()).toBe("images");
+    window.history.replaceState({}, "", "/");
+    expect(initialImageTab()).toBe("images");
+  });
+
   test("progressFraction", () => {
     expect(progressFraction({ disk: 1, disks: 1, bytesDone: 0, bytesTotal: 0 })).toBe(0);
     expect(progressFraction({ disk: 1, disks: 1, bytesDone: 50, bytesTotal: 100 })).toBe(0.5);

@@ -15,6 +15,23 @@ vi.mock("react-router", async () => {
   return createRouterMock()();
 });
 
+// The settings tabs have tests of their own.
+vi.mock("../../src/components/FileSnapshotSettings", async () => {
+  const actual = await vi.importActual("../../src/components/FileSnapshotSettings");
+  return {
+    ...actual,
+    FileSnapshotSettings: ({ sections }) => <div>Settings: {sections.join(",")}</div>,
+  };
+});
+
+vi.mock("../../src/components/FileRetention", () => ({
+  FileRetention: ({ userName, host }) => (
+    <div>
+      Retention of {userName}@{host}
+    </div>
+  ),
+}));
+
 // Minimal UIPreferences context value
 const mockUIPreferences = {
   pageSize: 10,
@@ -725,5 +742,45 @@ describe("Snapshots component", () => {
       // Should handle empty stats object gracefully
       unmount();
     });
+  });
+});
+
+describe("Snapshots tabs", () => {
+  afterEach(() => {
+    window.history.replaceState({}, "", "/");
+  });
+
+  test("opens the settings tabs", async () => {
+    axiosMock.onGet("/api/v1/sources").reply(200, { localUsername: "u", localHost: "h", sources: [] });
+
+    renderSnapshots();
+
+    expect(screen.getByRole("tab", { name: "Snapshots" })).toHaveAttribute("aria-selected", "true");
+
+    await userEvent.setup().click(screen.getByRole("tab", { name: "Schedule" }));
+    expect(screen.getByText("Settings: scheduling")).toBeInTheDocument();
+
+    await userEvent.setup().click(screen.getByRole("tab", { name: "Advanced" }));
+    expect(screen.getByText("Settings: compression,errors,upload,logging")).toBeInTheDocument();
+    // the tab left is unmounted, so it reads the policy again when it opens
+    await waitFor(() => expect(screen.queryByText("Settings: scheduling")).not.toBeInTheDocument());
+  });
+
+  test("opens the tab the URL asks for", () => {
+    window.history.replaceState({}, "", "/snapshots?tab=backup");
+    axiosMock.onGet("/api/v1/sources").reply(200, { localUsername: "u", localHost: "h", sources: [] });
+
+    renderSnapshots();
+
+    expect(screen.getByText("Settings: files")).toBeInTheDocument();
+  });
+
+  test("edits the retention of this computer", async () => {
+    window.history.replaceState({}, "", "/snapshots?tab=retention");
+    axiosMock.onGet("/api/v1/sources").reply(200, { localUsername: "u", localHost: "h", sources: [] });
+
+    renderSnapshots();
+
+    expect(await screen.findByText("Retention of u@h")).toBeInTheDocument();
   });
 });
