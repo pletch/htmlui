@@ -18,6 +18,10 @@ vi.mock("../../src/components/Logs", () => ({
   Logs: ({ taskID }) => <div>Logs for task {taskID}</div>,
 }));
 
+vi.mock("../../src/components/RepositoryDefaults", () => ({
+  RepositoryDefaults: () => <div>Repository Defaults Component</div>,
+}));
+
 vi.mock("../../src/utils/taskutil", async () => {
   const actual = await vi.importActual("../../src/utils/taskutil");
   return {
@@ -226,6 +230,35 @@ describe("Repository component - connected state", () => {
       expect(screen.getByDisplayValue("Disabled")).toBeInTheDocument();
       expect(screen.getByDisplayValue("-")).toBeInTheDocument();
     });
+  });
+});
+
+describe("Repository component - tabs", () => {
+  afterEach(() => {
+    window.history.replaceState({}, "", "/");
+  });
+
+  test("opens the defaults tab when clicked", async () => {
+    axiosMock.onGet("/api/v1/repo/status").reply(200, connectedStatus);
+
+    renderWithContext();
+
+    await waitFor(() => expect(screen.getByText("Connected To Repository")).toBeInTheDocument());
+    expect(screen.queryByText("Repository Defaults Component")).not.toBeInTheDocument();
+
+    await userEvent.setup().click(screen.getByRole("tab", { name: "Defaults" }));
+
+    expect(screen.getByText("Repository Defaults Component")).toBeInTheDocument();
+  });
+
+  test("opens the defaults tab from the URL", async () => {
+    window.history.replaceState({}, "", "/repo?tab=defaults");
+    axiosMock.onGet("/api/v1/repo/status").reply(200, connectedStatus);
+
+    renderWithContext();
+
+    await waitFor(() => expect(screen.getByText("Repository Defaults Component")).toBeInTheDocument());
+    expect(screen.getByRole("tab", { name: "Defaults" })).toHaveAttribute("aria-selected", "true");
   });
 });
 

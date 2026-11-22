@@ -7,7 +7,10 @@ import Row from "react-bootstrap/Row";
 import Form from "react-bootstrap/Form";
 import InputGroup from "react-bootstrap/InputGroup";
 import Spinner from "react-bootstrap/Spinner";
+import Tab from "react-bootstrap/Tab";
+import Tabs from "react-bootstrap/Tabs";
 import { handleChange } from "../forms";
+import { RepositoryDefaults } from "../components/RepositoryDefaults";
 import { SetupRepository } from "../components/SetupRepository";
 import { CLIEquivalent } from "../components/CLIEquivalent";
 import { cancelTask } from "../utils/taskutil";
@@ -26,6 +29,8 @@ export class Repository extends Component {
       error: null,
       provider: "",
       description: "",
+      // the open tab; links can open the defaults with /repo?tab=defaults
+      tab: new URLSearchParams(window.location.search).get("tab") === "defaults" ? "defaults" : "connection",
     };
 
     this.mounted = false;
@@ -174,123 +179,142 @@ export class Repository extends Component {
             <FontAwesomeIcon icon={faCheck} style={{ marginRight: 4 }} />
             <span>Connected To Repository</span>
           </p>
-          <Form>
-            <Row>
-              <Form.Group as={Col}>
-                <InputGroup>
-                  <Form.Control
-                    autoFocus={true}
-                    isInvalid={!this.state.status.description}
-                    name="status.description"
-                    value={this.state.status.description}
-                    onChange={this.handleChange}
-                    size="sm"
-                  />
-                  &nbsp;
-                  <Button data-testid="update-description" size="sm" onClick={this.updateDescription} type="button">
-                    Update Description
-                  </Button>
-                </InputGroup>
-                <Form.Control.Feedback type="invalid">Description Is Required</Form.Control.Feedback>
-              </Form.Group>
-            </Row>
-            {this.state.status.readonly && (
-              <Row>
-                <Badge pill variant="warning">
-                  Repository is read-only
-                </Badge>
-              </Row>
-            )}
-          </Form>
-          <hr />
-          <Form>
-            {this.state.status.apiServerURL ? (
-              <>
+          <Tabs
+            activeKey={this.state.tab}
+            onSelect={(k) => this.setState({ tab: k || "connection" })}
+            className="mb-3"
+            mountOnEnter
+            data-testid="repository-tabs"
+          >
+            <Tab eventKey="connection" title="Connection">
+              <Form>
                 <Row>
                   <Form.Group as={Col}>
-                    <Form.Label className="required">Server URL</Form.Label>
-                    <Form.Control readOnly defaultValue={this.state.status.apiServerURL} />
+                    <InputGroup>
+                      <Form.Control
+                        autoFocus={true}
+                        isInvalid={!this.state.status.description}
+                        name="status.description"
+                        value={this.state.status.description}
+                        onChange={this.handleChange}
+                        size="sm"
+                      />
+                      &nbsp;
+                      <Button data-testid="update-description" size="sm" onClick={this.updateDescription} type="button">
+                        Update Description
+                      </Button>
+                    </InputGroup>
+                    <Form.Control.Feedback type="invalid">Description Is Required</Form.Control.Feedback>
                   </Form.Group>
                 </Row>
-              </>
-            ) : (
-              <>
+                {this.state.status.readonly && (
+                  <Row>
+                    <Badge pill variant="warning">
+                      Repository is read-only
+                    </Badge>
+                  </Row>
+                )}
+              </Form>
+              <hr />
+              <Form>
+                {this.state.status.apiServerURL ? (
+                  <>
+                    <Row>
+                      <Form.Group as={Col}>
+                        <Form.Label className="required">Server URL</Form.Label>
+                        <Form.Control readOnly defaultValue={this.state.status.apiServerURL} />
+                      </Form.Group>
+                    </Row>
+                  </>
+                ) : (
+                  <>
+                    <Row>
+                      <Form.Group as={Col}>
+                        <Form.Label className="required">Config File</Form.Label>
+                        <Form.Control readOnly defaultValue={this.state.status.configFile} />
+                      </Form.Group>
+                    </Row>
+                    <Row>
+                      <Form.Group as={Col}>
+                        <Form.Label className="required">Provider</Form.Label>
+                        <Form.Control readOnly defaultValue={this.state.status.storage} />
+                      </Form.Group>
+                      <Form.Group as={Col}>
+                        <Form.Label className="required">Encryption Algorithm</Form.Label>
+                        <Form.Control readOnly defaultValue={this.state.status.encryption} />
+                      </Form.Group>
+                      <Form.Group as={Col}>
+                        <Form.Label className="required">Hash Algorithm</Form.Label>
+                        <Form.Control readOnly defaultValue={this.state.status.hash} />
+                      </Form.Group>
+                      <Form.Group as={Col}>
+                        <Form.Label className="required">Splitter Algorithm</Form.Label>
+                        <Form.Control readOnly defaultValue={this.state.status.splitter} />
+                      </Form.Group>
+                    </Row>
+                    <Row>
+                      <Form.Group as={Col}>
+                        <Form.Label className="required">Repository Format</Form.Label>
+                        <Form.Control readOnly defaultValue={this.state.status.formatVersion} />
+                      </Form.Group>
+                      <Form.Group as={Col}>
+                        <Form.Label className="required">Error Correction Overhead</Form.Label>
+                        <Form.Control
+                          readOnly
+                          defaultValue={
+                            this.state.status.eccOverheadPercent > 0
+                              ? this.state.status.eccOverheadPercent + "%"
+                              : "Disabled"
+                          }
+                        />
+                      </Form.Group>
+                      <Form.Group as={Col}>
+                        <Form.Label className="required">Error Correction Algorithm</Form.Label>
+                        <Form.Control readOnly defaultValue={this.state.status.ecc || "-"} />
+                      </Form.Group>
+                      <Form.Group as={Col}>
+                        <Form.Label className="required">Internal Compression</Form.Label>
+                        <Form.Control
+                          readOnly
+                          defaultValue={this.state.status.supportsContentCompression ? "yes" : "no"}
+                        />
+                      </Form.Group>
+                    </Row>
+                  </>
+                )}
                 <Row>
                   <Form.Group as={Col}>
-                    <Form.Label className="required">Config File</Form.Label>
-                    <Form.Control readOnly defaultValue={this.state.status.configFile} />
-                  </Form.Group>
-                </Row>
-                <Row>
-                  <Form.Group as={Col}>
-                    <Form.Label className="required">Provider</Form.Label>
-                    <Form.Control readOnly defaultValue={this.state.status.storage} />
-                  </Form.Group>
-                  <Form.Group as={Col}>
-                    <Form.Label className="required">Encryption Algorithm</Form.Label>
-                    <Form.Control readOnly defaultValue={this.state.status.encryption} />
-                  </Form.Group>
-                  <Form.Group as={Col}>
-                    <Form.Label className="required">Hash Algorithm</Form.Label>
-                    <Form.Control readOnly defaultValue={this.state.status.hash} />
-                  </Form.Group>
-                  <Form.Group as={Col}>
-                    <Form.Label className="required">Splitter Algorithm</Form.Label>
-                    <Form.Control readOnly defaultValue={this.state.status.splitter} />
-                  </Form.Group>
-                </Row>
-                <Row>
-                  <Form.Group as={Col}>
-                    <Form.Label className="required">Repository Format</Form.Label>
-                    <Form.Control readOnly defaultValue={this.state.status.formatVersion} />
-                  </Form.Group>
-                  <Form.Group as={Col}>
-                    <Form.Label className="required">Error Correction Overhead</Form.Label>
+                    <Form.Label className="required">Connected as:</Form.Label>
                     <Form.Control
                       readOnly
-                      defaultValue={
-                        this.state.status.eccOverheadPercent > 0
-                          ? this.state.status.eccOverheadPercent + "%"
-                          : "Disabled"
-                      }
+                      defaultValue={this.state.status.username + "@" + this.state.status.hostname}
                     />
                   </Form.Group>
-                  <Form.Group as={Col}>
-                    <Form.Label className="required">Error Correction Algorithm</Form.Label>
-                    <Form.Control readOnly defaultValue={this.state.status.ecc || "-"} />
-                  </Form.Group>
-                  <Form.Group as={Col}>
-                    <Form.Label className="required">Internal Compression</Form.Label>
-                    <Form.Control readOnly defaultValue={this.state.status.supportsContentCompression ? "yes" : "no"} />
-                  </Form.Group>
                 </Row>
-              </>
-            )}
-            <Row>
-              <Form.Group as={Col}>
-                <Form.Label className="required">Connected as:</Form.Label>
-                <Form.Control readOnly defaultValue={this.state.status.username + "@" + this.state.status.hostname} />
-              </Form.Group>
-            </Row>
-            <Row>
-              <Col>&nbsp;</Col>
-            </Row>
-            <Row>
-              <Col>
-                <Button data-testid="disconnect" size="sm" variant="danger" onClick={this.disconnect}>
-                  Disconnect
-                </Button>
-              </Col>
-            </Row>
-          </Form>
-          <Row>
-            <Col>&nbsp;</Col>
-          </Row>
-          <Row>
-            <Col xs={12}>
-              <CLIEquivalent command="repository status" />
-            </Col>
-          </Row>
+                <Row>
+                  <Col>&nbsp;</Col>
+                </Row>
+                <Row>
+                  <Col>
+                    <Button data-testid="disconnect" size="sm" variant="danger" onClick={this.disconnect}>
+                      Disconnect
+                    </Button>
+                  </Col>
+                </Row>
+              </Form>
+              <Row>
+                <Col>&nbsp;</Col>
+              </Row>
+              <Row>
+                <Col xs={12}>
+                  <CLIEquivalent command="repository status" />
+                </Col>
+              </Row>
+            </Tab>
+            <Tab eventKey="defaults" title="Defaults">
+              <RepositoryDefaults />
+            </Tab>
+          </Tabs>
         </>
       );
     }

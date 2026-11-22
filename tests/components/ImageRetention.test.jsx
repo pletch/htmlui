@@ -2,6 +2,7 @@ import React from "react";
 import { describe, test, expect, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
 import "@testing-library/jest-dom";
 import {
   DiskRetention,
@@ -57,7 +58,7 @@ describe("DiskRetention", () => {
 
     await waitFor(() => expect(screen.getByTestId("retention-effective-keepLatest")).toHaveTextContent("10"));
     expect(screen.getByTestId("retention-input-keepLatest")).toHaveValue("");
-    expect(screen.getByTestId("retention-effective-keepLatest")).toHaveTextContent("global policy");
+    expect(screen.getByTestId("retention-effective-keepLatest")).toHaveTextContent("repository defaults");
     expect(screen.getByTestId("retention-effective-keepMonthly")).toHaveTextContent("24");
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Inherit All" })).toBeDisabled();
@@ -82,7 +83,7 @@ describe("DiskRetention", () => {
 
     // the effective values follow the inputs before saving
     await waitFor(() => expect(screen.getByTestId("retention-effective-keepLatest")).toHaveTextContent("3"));
-    expect(screen.getByTestId("retention-effective-keepDaily")).toHaveTextContent("global policy");
+    expect(screen.getByTestId("retention-effective-keepDaily")).toHaveTextContent("repository defaults");
 
     await user.click(screen.getByRole("button", { name: "Save" }));
 
@@ -120,7 +121,11 @@ describe("DiskRetention", () => {
 
 describe("ImageRetention", () => {
   test("asks for an image first when there are no disks", () => {
-    render(<ImageRetention disks={[]} titleOf={(s) => s.path} />);
+    render(
+      <MemoryRouter>
+        <ImageRetention disks={[]} titleOf={(s) => s.path} />
+      </MemoryRouter>,
+    );
 
     expect(screen.getByText(/once it has an image/)).toBeInTheDocument();
   });
@@ -149,7 +154,7 @@ describe("retention helpers", () => {
 
   test("describes where a setting is defined", () => {
     expect(definedBy(undefined, source)).toBe("");
-    expect(definedBy({}, source)).toBe("global policy");
+    expect(definedBy({}, source)).toBe("repository defaults");
     expect(definedBy({ host: "pc" }, source)).toBe("@pc");
     expect(definedBy({ host: "pc", userName: "u" }, source)).toBe("u@pc");
     expect(definedBy(thisDisk, source)).toBe("this disk");
