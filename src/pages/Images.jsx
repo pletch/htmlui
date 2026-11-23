@@ -7,6 +7,7 @@ import {
   faEject,
   faExclamationTriangle,
   faFolderOpen,
+  faGear,
   faHardDrive,
   faInfoCircle,
   faListUl,
@@ -32,11 +33,13 @@ import Tabs from "react-bootstrap/Tabs";
 import {
   CreateImageDialog,
   ImageScheduleForm,
+  diskScheduleOf,
+  diskScheduleText,
   scheduleSummary,
   settingsFromSchedule,
 } from "../components/ImageScheduleForm";
 import { CLIEquivalent } from "../components/CLIEquivalent";
-import { ImageRetention } from "../components/ImageRetention";
+import { DiskSettings } from "../components/DiskSettings";
 import KopiaTable from "../components/KopiaTable";
 import { UIPreferencesContext } from "../contexts/UIPreferencesContext";
 import { formatDuration, sizeDisplayName } from "../utils/formatutils";
@@ -115,22 +118,39 @@ export function taskStateVariant(status) {
   }
 }
 
+/** Returns the short name of a scheduled task, without its Task Scheduler folder. */
+export function taskShortName(name) {
+  return name.substring(name.lastIndexOf("\\") + 1);
+}
+
+/** Returns the volumes whose disks a create task images, from the schedule settings, or []. */
+export function taskVolumes(schedule, name) {
+  const short = taskShortName(name);
+  const group = schedule?.disks?.length
+    ? schedule.disks.find((d) => d.task === short)
+    : short === "Image create" && schedule;
+
+  return group?.volumes || [];
+}
+
 /** Shows a scheduled task as its short name with the full Task Scheduler path under it. */
-function TaskNameCell({ name }) {
-  const short = name.substring(name.lastIndexOf("\\") + 1);
+function TaskNameCell({ name, volumes }) {
   return (
     <td className="col-source">
-      <span className="source-name">{short}</span>
+      <span className="source-name">
+        {taskShortName(name)}
+        {volumes?.length > 0 && <span className="text-muted"> ({volumes.join(" ")})</span>}
+      </span>
       <span className="source-path">{name}</span>
     </td>
   );
 }
 
-function TaskRow({ task }) {
+function TaskRow({ task, volumes }) {
   if (task.error) {
     return (
       <tr>
-        <TaskNameCell name={task.name} />
+        <TaskNameCell name={task.name} volumes={volumes} />
         <td colSpan={4}>
           <Badge bg="danger">error</Badge> <span className="text-danger">{task.error}</span>
         </td>
@@ -141,7 +161,7 @@ function TaskRow({ task }) {
   if (!task.scheduled) {
     return (
       <tr>
-        <TaskNameCell name={task.name} />
+        <TaskNameCell name={task.name} volumes={volumes} />
         <td colSpan={4}>
           <Badge bg="secondary">not scheduled</Badge>
         </td>
@@ -152,7 +172,7 @@ function TaskRow({ task }) {
   if (task.statusHidden) {
     return (
       <tr>
-        <TaskNameCell name={task.name} />
+        <TaskNameCell name={task.name} volumes={volumes} />
         <td colSpan={4} data-testid="task-status-hidden">
           <Badge bg="secondary">scheduled</Badge>{" "}
           <span className="text-muted">
@@ -167,7 +187,7 @@ function TaskRow({ task }) {
   const resultVariant = taskResultVariant(task.lastResult);
   return (
     <tr>
-      <TaskNameCell name={task.name} />
+      <TaskNameCell name={task.name} volumes={volumes} />
       <td className="col-time">{task.status && <Badge bg={taskStateVariant(task.status)}>{task.status}</Badge>}</td>
       <td className="col-time">{task.nextRunTime}</td>
       <td className="col-time">
@@ -344,7 +364,7 @@ function ScheduleSettings({ status, busy, onUpdate }) {
             </Badge>{" "}
           </>
         )}
-        {scheduleSummary(s)}
+        {scheduleSummary(settingsFromSchedule(s))}
         {s.paused && " Images are not created automatically until the schedule is resumed."}
       </p>
       {status.scheduleForThisRepository === false && (
@@ -541,7 +561,7 @@ function ScheduleTab({ status, bytesStringBase2, onEdit, onRemove, onPause, onUp
         </thead>
         <tbody>
           {status.tasks.map((t) => (
-            <TaskRow key={t.name} task={t} />
+            <TaskRow key={t.name} task={t} volumes={taskVolumes(status.schedule, t.name)} />
           ))}
         </tbody>
       </Table>
@@ -660,6 +680,43 @@ function DiskMap({ image, showHost, bytesStringBase2, busy, onBrowse }) {
   );
 }
 
+/** Returns the drive letters of the volumes in the latest image of a disk, e.g. ["C:"]. */
+export function latestVolumes(groups, source) {
+  const g = groups.find(
+    (x) => x.source.host === source.host && x.source.userName === source.userName && x.source.path === source.path,
+  );
+
+  return (g?.images[0]?.volumes || []).map((v) => parseVolumeEntry(v.entryName).letter).filter((l) => l);
+}
+
+/**
+ * The schedule of one disk in its Settings: when it is imaged, and the
+ * button that opens the schedule of all the disks, which one administrator
+ * prompt saves.
+ */
+function DiskSchedule({ schedule, volumes, busy, onEdit }) {
+  const g = diskScheduleOf(schedule, volumes);
+
+  return (
+    <>
+      <h5>Schedule</h5>
+      <p data-testid="disk-schedule">
+        {g ? (
+          <>
+            Imaged {diskScheduleText(g)}
+            {schedule.paused && " (paused)"}.
+          </>
+        ) : (
+          "Not scheduled: images of this disk are created only when you create them."
+        )}{" "}
+        <Button size="sm" variant="secondary" disabled={busy} onClick={onEdit} data-testid="disk-edit-schedule">
+          {schedule ? "Change Schedule..." : "Set Up Schedule..."}
+        </Button>
+      </p>
+    </>
+  );
+}
+
 /** Groups images by disk (their source), keeping the API's order: newest first within a disk. */
 export function groupImagesByDisk(images) {
   const groups = [];
@@ -732,7 +789,7 @@ function SpaceSummary({ space, bytesStringBase2 }) {
  * group's heading shows what its images take on the server together, and
  * Unique Data what only an image uses.
  */
-function ImageList({ groups, space, selectedId, onSelect, mounts, showHost, bytesStringBase2 }) {
+function ImageList({ groups, space, selectedId, onSelect, onSettings, mounts, showHost, bytesStringBase2 }) {
   const [collapsed, setCollapsed] = useState({});
   const size = (v) => (v === undefined ? "" : sizeDisplayName(v, bytesStringBase2));
 
@@ -774,6 +831,20 @@ function ImageList({ groups, space, selectedId, onSelect, mounts, showHost, byte
                   ({g.images.length} {g.images.length === 1 ? "image" : "images"})
                 </span>
                 <SpaceSummary space={sourceSpace(space, g.source)} bytesStringBase2={bytesStringBase2} />
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="float-end"
+                  title={"Retention and other settings of " + diskDisplayName(g.source)}
+                  onClick={(e) => {
+                    // the heading itself collapses the group
+                    e.stopPropagation();
+                    onSettings(g.source);
+                  }}
+                  data-testid="disk-settings-button"
+                >
+                  <FontAwesomeIcon icon={faGear} /> Settings
+                </Button>
               </td>
             </tr>
             {!collapsed[g.key] &&
@@ -1244,7 +1315,7 @@ export function ImageFiles({ image, bytesStringBase2, busy, onBrowse }) {
   );
 }
 
-const imageTabs = ["images", "files", "schedule", "retention", "media", "drivers"];
+const imageTabs = ["images", "files", "schedule", "media", "drivers"];
 
 /** Returns the tab the URL asks for, or the image list. */
 export function initialImageTab() {
@@ -1269,6 +1340,8 @@ export function Images() {
   const [creating, setCreating] = useState(false);
   const [creatingMedia, setCreatingMedia] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
+  // the disk whose settings are open, or null
+  const [settingsFor, setSettingsFor] = useState(null);
   const [diskFilter, setDiskFilter] = useState("");
   const [mounts, setMounts] = useState({});
   // links can open a tab with /images?tab=<key>
@@ -1749,6 +1822,7 @@ export function Images() {
               space={images.space}
               selectedId={selected?.id}
               onSelect={setSelectedId}
+              onSettings={setSettingsFor}
               mounts={mounts}
               showHost={showHost}
               bytesStringBase2={bytesStringBase2}
@@ -1782,9 +1856,6 @@ export function Images() {
             busy={running}
           />
         </Tab>
-        <Tab eventKey="retention" title="Retention" mountOnEnter>
-          <ImageRetention disks={disks} titleOf={diskDisplayName} />
-        </Tab>
         <Tab eventKey="media" title="Recovery Media">
           {status.supported ? (
             <RecoveryMedia status={status} busy={running} onCreate={onCreateRecoveryMedia} />
@@ -1800,6 +1871,23 @@ export function Images() {
           <CLIEquivalent command="image drivers" />
         </Tab>
       </Tabs>
+      <DiskSettings
+        source={settingsFor}
+        title={settingsFor ? diskDisplayName(settingsFor) : ""}
+        onHide={() => setSettingsFor(null)}
+      >
+        {settingsFor && status.supported && settingsFor.host === images.localHost && (
+          <DiskSchedule
+            schedule={status.schedule}
+            volumes={latestVolumes(disks, settingsFor)}
+            busy={running}
+            onEdit={() => {
+              setSettingsFor(null);
+              setEditing(true);
+            }}
+          />
+        )}
+      </DiskSettings>
       {editing && (
         <ImageScheduleForm
           show={editing}

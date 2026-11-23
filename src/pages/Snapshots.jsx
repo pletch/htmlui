@@ -13,7 +13,6 @@ import Spinner from "react-bootstrap/Spinner";
 import Tab from "react-bootstrap/Tab";
 import Tabs from "react-bootstrap/Tabs";
 import { Link } from "react-router";
-import { FileRetention } from "../components/FileRetention";
 import { FileSnapshotSettings, fileSettingsTabs } from "../components/FileSnapshotSettings";
 import KopiaTable from "../components/KopiaTable";
 import { baseName, compare, formatOwnerName, sizeDisplayName } from "../utils/formatutils";
@@ -62,8 +61,6 @@ export class Snapshots extends Component {
       error: null,
 
       localSourceName: "",
-      localUsername: "",
-      localHost: "",
       multiUser: false,
       selectedOwner: null,
       selectedDirectory: "",
@@ -104,8 +101,6 @@ export class Snapshots extends Component {
         .then((result) => {
           this.setState({
             localSourceName: result.data.localUsername + "@" + result.data.localHost,
-            localUsername: result.data.localUsername,
-            localHost: result.data.localHost,
             multiUser: result.data.multiUser,
             sources: result.data.sources,
             isLoading: false,
@@ -330,14 +325,6 @@ export class Snapshots extends Component {
     );
   }
 
-  renderRetention() {
-    if (!this.state.localHost) {
-      return <Spinner animation="border" variant="primary" />;
-    }
-
-    return <FileRetention userName={this.state.localUsername} host={this.state.localHost} />;
-  }
-
   render() {
     return (
       <Tabs
@@ -355,7 +342,7 @@ export class Snapshots extends Component {
         </Tab>
         {fileSettingsTabs.map((t) => (
           <Tab key={t.key} eventKey={t.key} title={t.title}>
-            {t.sections ? <FileSnapshotSettings sections={t.sections} intro={t.intro} /> : this.renderRetention()}
+            <FileSnapshotSettings sections={t.sections} intro={t.intro} />
           </Tab>
         ))}
       </Tabs>

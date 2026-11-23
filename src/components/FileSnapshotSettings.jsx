@@ -5,8 +5,9 @@ import { PolicyEditor } from "./policy-editor/PolicyEditor";
 /**
  * The tabs of the File Snapshots page that edit settings: each shows some
  * sections of the global policy, which only file snapshots use. Retention,
- * which disk images share, has no sections: it edits this computer's policy.
- * The folders that are backed up are listed on the page's Folders tab.
+ * which disk images share, is set on Repository › Defaults, and a folder's
+ * own settings on its Policy tab. The folders that are backed up are listed
+ * on the page's Folders tab.
  */
 export const fileSettingsTabs = [
   {
@@ -17,7 +18,6 @@ export const fileSettingsTabs = [
       "The files and folders to skip inside every folder that is backed up. The folders themselves are listed on the Folders tab.",
   },
   { key: "schedule", title: "Schedule", sections: ["scheduling"] },
-  { key: "retention", title: "Retention" },
   { key: "actions", title: "Actions", sections: ["snapshot-actions", "folder-actions"] },
   { key: "advanced", title: "Advanced", sections: ["compression", "errors", "upload", "logging"] },
 ];

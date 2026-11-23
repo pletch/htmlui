@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import moment from "moment";
 import "@testing-library/jest-dom";
@@ -180,9 +180,11 @@ describe("Images page", () => {
     expect(screen.getByTestId("image-row-m1")).toHaveClass("table-active");
     expect(screen.getByTestId("disk-map")).toHaveTextContent("Disk 0f6ab3f2-1c3d-4e5f-8a9b-0c1d2e3f4a51");
     expect(screen.getByText("p3-C.img")).toBeInTheDocument();
-    for (const tab of ["Images", "Schedule", "Retention", "Recovery Media", "Drivers"]) {
+    for (const tab of ["Images", "Schedule", "Recovery Media", "Drivers"]) {
       expect(screen.getByRole("tab", { name: tab })).toBeInTheDocument();
     }
+    // retention is set per disk, from the disk's Settings
+    expect(screen.queryByRole("tab", { name: "Retention" })).not.toBeInTheDocument();
     expect(screen.getByText("Disk Size")).toBeInTheDocument();
     expect(screen.getByText("New Data")).toBeInTheDocument();
     expect(screen.getByText("Uploaded")).toBeInTheDocument();
@@ -200,7 +202,7 @@ describe("Images page", () => {
     expect(screen.getByTestId("run-image-task")).toBeEnabled();
   });
 
-  test("sets the retention of each disk in the Retention tab", async () => {
+  test("sets the retention of a disk from its Settings", async () => {
     mockLists(scheduledStatus());
 
     const policyURL = "/api/v1/policy?userName=u&host=pc&path=" + encodeURIComponent(image.source.path);
@@ -213,15 +215,27 @@ describe("Images page", () => {
     renderImages();
 
     const user = userEvent.setup();
-    await waitFor(() => expect(screen.getByRole("tab", { name: "Retention" })).toBeInTheDocument());
-    await user.click(screen.getByRole("tab", { name: "Retention" }));
+    await user.click(await screen.findByTestId("disk-settings-button"));
+
+    const dialog = await screen.findByTestId("disk-settings");
+    expect(within(dialog).getByText("Disk 0f6ab3f2-1c3d-4e5f-8a9b-0c1d2e3f4a51 Settings")).toBeInTheDocument();
+    // the button does not also collapse the disk's group
+    expect(screen.getByTestId("image-row-m1")).toBeInTheDocument();
 
     const disk = await screen.findByTestId("retention-" + image.source.path);
-    expect(within(disk).getByText("Disk 0f6ab3f2-1c3d-4e5f-8a9b-0c1d2e3f4a51")).toBeInTheDocument();
     await waitFor(() => expect(within(disk).getByTestId("retention-input-keepDaily")).toHaveValue("7"));
     await waitFor(() =>
       expect(within(disk).getByTestId("retention-effective-keepDaily")).toHaveTextContent("this disk"),
     );
+
+    // the disk's schedule, from the drive letters of its latest image
+    expect(within(dialog).getByTestId("disk-schedule")).toHaveTextContent("Imaged on Monday, Thursday at 02:00.");
+
+    // changing it opens the schedule of all the disks
+    mockDisks();
+    await user.click(within(dialog).getByTestId("disk-edit-schedule"));
+    await waitFor(() => expect(screen.getByText("Image Schedule")).toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByTestId("disk-settings")).not.toBeInTheDocument());
   });
 
   test("names the tile action Mount & Browse", async () => {
@@ -603,14 +617,19 @@ describe("Images page", () => {
 
     await userEvent.click(screen.getByLabelText(/Disk 1 - SATA SSD/));
 
-    // every day at first: unticking Sunday leaves the other days
-    await userEvent.click(screen.getByLabelText("Sun"));
+    // each disk has its own time and days; every day at first: unticking
+    // Sunday leaves the other days
+    const windowsDisk = screen.getByTestId("disk-when-3");
+    const dataDisk = screen.getByTestId("disk-when-1");
+    await userEvent.click(within(windowsDisk).getByLabelText("Sun"));
     await userEvent.selectOptions(screen.getByLabelText("Weekly check"), "none");
 
+    // the same time and days as the Windows disk: one schedule for both
+    await userEvent.click(within(dataDisk).getByLabelText("Sun"));
     await userEvent.click(screen.getByTestId("save-schedule"));
 
     await waitFor(() => expect(screen.getByText(/Images are scheduled/)).toBeInTheDocument());
-    expect(window.kopiaUI.installImageSchedule).toHaveBeenCalledWith({
+    expect(window.kopiaUI.installImageSchedule).toHaveBeenLastCalledWith({
       volumes: ["C:", "D:"],
       at: "02:00",
       days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
@@ -619,6 +638,75 @@ describe("Images page", () => {
       wake: true,
       allowOnBattery: false,
     });
+  });
+
+  test("schedules a disk at its own time", async () => {
+    mockLists(scheduledStatus());
+    mockDisks();
+    window.kopiaUI = { installImageSchedule: vi.fn().mockResolvedValue("done") };
+    renderImages();
+
+    await waitFor(() => expect(screen.getByTestId("edit-schedule")).toBeEnabled());
+    await userEvent.click(screen.getByTestId("edit-schedule"));
+    await waitFor(() => expect(screen.getByLabelText(/Disk 3 - NVMe/)).toBeChecked());
+
+    // a disk added takes the time of the schedule, and can have its own
+    await userEvent.click(screen.getByLabelText(/Disk 1 - SATA SSD/));
+    const dataDisk = screen.getByTestId("disk-when-1");
+    expect(within(dataDisk).getByLabelText("Time")).toHaveValue("02:00");
+    fireEvent.change(within(dataDisk).getByLabelText("Time"), { target: { value: "21:30" } });
+
+    await userEvent.click(screen.getByTestId("save-schedule"));
+
+    await waitFor(() => expect(screen.getByText(/Images are scheduled/)).toBeInTheDocument());
+    expect(window.kopiaUI.installImageSchedule).toHaveBeenCalledWith({
+      volumes: ["C:"],
+      at: "02:00",
+      days: ["Monday", "Thursday"],
+      disks: [{ volumes: ["D:"], at: "21:30", days: ["Monday", "Thursday"] }],
+      checkDay: "Sunday",
+      checkAt: "12:00",
+      wake: true,
+      allowOnBattery: false,
+    });
+    expect(screen.getByText(/Images are scheduled/)).toHaveTextContent(
+      "of the disks holding C:, on Monday, Thursday at 02:00; of D:, on Monday, Thursday at 21:30",
+    );
+  });
+
+  test("shows the schedules of each disk", async () => {
+    const st = scheduledStatus();
+    st.schedule = {
+      ...st.schedule,
+      volumes: ["C:", "D:"],
+      disks: [
+        { volumes: ["C:"], at: "02:00", days: ["Monday", "Thursday"], task: "Image create" },
+        { volumes: ["D:"], at: "21:30", task: "Image create 2" },
+      ],
+    };
+    st.tasks = [
+      { name: createTask, scheduled: true, status: "Ready" },
+      { name: createTask + " 2", scheduled: true, status: "Ready" },
+      { name: checkTask, scheduled: true, status: "Ready" },
+    ];
+    mockLists(st);
+    mockDisks();
+    window.kopiaUI = { installImageSchedule: vi.fn() };
+    renderImages();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("schedule-summary")).toHaveTextContent(
+        "Images of the disks holding C:, on Monday, Thursday at 02:00; of D:, every day at 21:30; checked Sundays at 12:00.",
+      ),
+    );
+    // each task names the disks it images
+    expect(screen.getByText("(D:)")).toBeInTheDocument();
+    expect(screen.getByText("(C:)")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId("edit-schedule"));
+    await waitFor(() => expect(screen.getByLabelText(/Disk 1 - SATA SSD/)).toBeChecked());
+    expect(within(screen.getByTestId("disk-when-1")).getByLabelText("Time")).toHaveValue("21:30");
+    expect(within(screen.getByTestId("disk-when-3")).getByLabelText("Time")).toHaveValue("02:00");
   });
 
   test("keeps the form open when saving fails", async () => {
@@ -1231,8 +1319,11 @@ describe("Images page", () => {
 
 describe("Images helpers", () => {
   test("initialImageTab", () => {
+    window.history.replaceState({}, "", "/images?tab=schedule");
+    expect(initialImageTab()).toBe("schedule");
+    // retention is no longer a tab
     window.history.replaceState({}, "", "/images?tab=retention");
-    expect(initialImageTab()).toBe("retention");
+    expect(initialImageTab()).toBe("images");
     window.history.replaceState({}, "", "/images?tab=bogus");
     expect(initialImageTab()).toBe("images");
     window.history.replaceState({}, "", "/");

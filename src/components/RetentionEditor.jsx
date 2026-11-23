@@ -117,7 +117,8 @@ export function definedBy(definition, source, selfName = "this disk") {
 
 /** Returns the kopia command that sets a source's retention as the inputs do. */
 export function retentionCommand(source, inputs) {
-  const target = isGlobalSource(source) ? "--global" : source.userName + "@" + source.host + ":" + source.path;
+  const computer = (source.userName || "") + "@" + source.host;
+  const target = isGlobalSource(source) ? "--global" : source.path ? computer + ":" + source.path : computer;
   const flags = retentionFields
     .filter((f) => (inputs[f.key] ?? "").trim() !== "")
     .map((f) => f.flag + " " + inputs[f.key].trim());
@@ -134,7 +135,7 @@ function errorText(e) {
  * policy is kept as it is. An empty input inherits the setting from the
  * wider policies, or for the global policy from kopia's built-in default.
  */
-export function RetentionEditor({ source, title, ownLabel, selfName, savedText, testID }) {
+export function RetentionEditor({ source, title, ownLabel, selfName, savedText, testID, onSaved }) {
   const [policy, setPolicy] = useState(null);
   const [inputs, setInputs] = useState(() => inputsFromRetention());
   const [saved, setSaved] = useState(() => inputsFromRetention());
@@ -219,6 +220,7 @@ export function RetentionEditor({ source, title, ownLabel, selfName, savedText, 
       .then(() => {
         setMessage({ variant: "success", text: savedText });
         load();
+        onSaved?.();
       })
       .catch((err) => setMessage({ variant: "danger", text: "Unable to save the retention: " + errorText(err) }))
       .finally(() => setSaving(false));
@@ -301,4 +303,5 @@ RetentionEditor.propTypes = {
   selfName: PropTypes.string.isRequired,
   savedText: PropTypes.string.isRequired,
   testID: PropTypes.string,
+  onSaved: PropTypes.func,
 };

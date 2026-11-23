@@ -24,14 +24,6 @@ vi.mock("../../src/components/FileSnapshotSettings", async () => {
   };
 });
 
-vi.mock("../../src/components/FileRetention", () => ({
-  FileRetention: ({ userName, host }) => (
-    <div>
-      Retention of {userName}@{host}
-    </div>
-  ),
-}));
-
 // Minimal UIPreferences context value
 const mockUIPreferences = {
   pageSize: 10,
@@ -774,14 +766,5 @@ describe("Snapshots tabs", () => {
     renderSnapshots();
 
     expect(screen.getByText("Settings: files")).toBeInTheDocument();
-  });
-
-  test("edits the retention of this computer", async () => {
-    window.history.replaceState({}, "", "/snapshots?tab=retention");
-    axiosMock.onGet("/api/v1/sources").reply(200, { localUsername: "u", localHost: "h", sources: [] });
-
-    renderSnapshots();
-
-    expect(await screen.findByText("Retention of u@h")).toBeInTheDocument();
   });
 });

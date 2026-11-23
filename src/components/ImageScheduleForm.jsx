@@ -25,31 +25,70 @@ export const defaultScheduleSettings = {
 };
 
 /**
+ * Returns the schedules that the settings the tasks were installed with
+ * record: one for each set of disks imaged at the same time on the same
+ * days. Settings written before there was one for each disk have one.
+ */
+export function installedScheduleGroups(schedule) {
+  if (!schedule) {
+    return [];
+  }
+
+  const groups = schedule.disks?.length
+    ? schedule.disks
+    : [{ volumes: schedule.volumes || [], at: schedule.at, days: schedule.days }];
+
+  return groups
+    .filter((g) => g.volumes?.length)
+    .map((g) => ({ volumes: g.volumes, at: g.at || defaultScheduleSettings.at, days: g.days || [] }));
+}
+
+/**
  * Returns the form's settings from the settings the tasks were installed
- * with, or the defaults when they are not known.
+ * with, or the defaults when they are not known. The first schedule is in
+ * volumes, at and days, as KopiaUI has always taken them; disks holds the
+ * others, when there are any.
  */
 export function settingsFromSchedule(schedule) {
   if (!schedule) {
     return { ...defaultScheduleSettings };
   }
 
-  return {
-    volumes: schedule.volumes || [],
-    at: schedule.at || defaultScheduleSettings.at,
-    days: schedule.days || [],
+  const [first, ...others] = installedScheduleGroups(schedule);
+
+  const settings = {
+    volumes: first?.volumes || [],
+    at: first?.at || defaultScheduleSettings.at,
+    days: first?.days || [],
     checkDay: schedule.checkDay || "none",
     checkAt: schedule.checkAt || defaultScheduleSettings.checkAt,
     wake: schedule.wake ?? true,
     allowOnBattery: schedule.allowOnBattery ?? false,
   };
+
+  if (others.length > 0) {
+    settings.disks = others;
+  }
+
+  return settings;
+}
+
+/** Returns the schedules of the form's settings, the first one first. */
+export function scheduleGroups(s) {
+  return [{ volumes: s.volumes, at: s.at, days: s.days }, ...(s.disks || [])].filter((g) => g.volumes.length > 0);
+}
+
+function whenText(g) {
+  return (g.days && g.days.length > 0 ? "on " + g.days.join(", ") : "every day") + " at " + g.at;
 }
 
 /**
- * Describes when images are created, e.g. "every day at 02:00".
+ * Describes when images are created, e.g. "Images of the disks holding C:,
+ * every day at 02:00."
  */
 export function scheduleSummary(s) {
-  const when = s.days && s.days.length > 0 ? "on " + s.days.join(", ") : "every day";
-  let text = "Images of the disks holding " + s.volumes.join(" ") + ", " + when + " at " + s.at;
+  const groups = scheduleGroups(s);
+  let text = "Images of the disks holding " + groups.map((g) => g.volumes.join(" ") + ", " + whenText(g)).join("; of ");
 
   if (s.checkDay && s.checkDay !== "none") {
     text += "; checked " + s.checkDay + "s at " + s.checkAt;
@@ -69,6 +108,10 @@ export function scheduleCommand(s) {
     args.push("--days", s.days.join(","));
   }
 
+  for (const g of s.disks || []) {
+    args.push("--disk-schedule", g.volumes.join(",") + "=" + g.at + (g.days.length > 0 ? "/" + g.days.join(",") : ""));
+  }
+
   args.push("--check-day", s.checkDay);
 
   if (s.checkDay !== "none") {
@@ -82,6 +125,50 @@ export function scheduleCommand(s) {
   }
 
   return args.join(" ");
+}
+
+/** Returns the schedule of each disk of the settings: one entry for each volume. */
+export function perDiskSchedules(s) {
+  return scheduleGroups(s).flatMap((g) => g.volumes.map((volume) => ({ volume, at: g.at, days: g.days })));
+}
+
+/**
+ * Returns the settings with the schedules of the disks: disks imaged at the
+ * same time on the same days share a schedule, which is run by one task.
+ */
+export function withDiskSchedules(s, perDisk) {
+  const groups = [];
+
+  for (const d of perDisk) {
+    const days = weekdays.filter((x) => d.days.includes(x));
+    const g = groups.find((x) => x.at === d.at && x.days.join() === days.join());
+
+    if (g) {
+      g.volumes.push(d.volume);
+    } else {
+      groups.push({ volumes: [d.volume], at: d.at, days });
+    }
+  }
+
+  const [first, ...others] = groups;
+  const { disks: _old, ...rest } = s;
+  const out = { ...rest, volumes: first?.volumes || [], at: first?.at || s.at, days: first?.days || [] };
+
+  if (others.length > 0) {
+    out.disks = others;
+  }
+
+  return out;
+}
+
+/** Returns the schedule of the disk that holds one of the volumes, or undefined. */
+export function diskScheduleOf(schedule, volumes) {
+  return installedScheduleGroups(schedule).find((g) => g.volumes.some((v) => volumes.includes(v)));
+}
+
+/** Describes when a disk is imaged, e.g. "every day at 02:00". */
+export function diskScheduleText(g) {
+  return whenText(g);
 }
 
 function diskLabel(d, bytesStringBase2) {
@@ -171,35 +258,140 @@ DiskChecks.propTypes = {
   onChange: PropTypes.func.isRequired,
 };
 
-/**
- * Edits the image schedule. KopiaUI saves it as administrator after the UAC
- * prompt; in a browser the form shows the command to run instead.
- */
-export function ImageScheduleForm({ show, initial, onHide, onSaved }) {
-  const { disks, error: disksError } = useLocalDisks();
-  const [settings, setSettings] = useState(initial);
-  const [chosenVolumes, setChosenVolumes] = useState(initial.volumes.length > 0 ? initial.volumes : null);
-  const [error, setError] = useState(null);
-  const [saving, setSaving] = useState(false);
+/** The time and days of one disk's schedule; no days means every day. */
+function WhenFields({ id, at, days, onChange }) {
+  const everyDay = days.length === 0;
 
-  const canSave = !!window.kopiaUI?.installImageSchedule;
-
-  // the Windows disk until a disk is chosen
-  const current = { ...settings, volumes: chosenVolumes ?? systemVolumes(disks) };
-
-  const set = (field, value) => setSettings((s) => ({ ...s, [field]: value }));
-
-  // no days means every day
   const toggleDay = (day) => {
-    const days = settings.days.length === 0 ? weekdays : settings.days;
-    const next = days.includes(day) ? days.filter((x) => x !== day) : [...days, day];
+    const current = everyDay ? weekdays : days;
+    const next = current.includes(day) ? current.filter((x) => x !== day) : [...current, day];
 
     if (next.length === 0) {
       return;
     }
 
-    set("days", next.length === weekdays.length ? [] : weekdays.filter((x) => next.includes(x)));
+    onChange({ at, days: next.length === weekdays.length ? [] : weekdays.filter((x) => next.includes(x)) });
   };
+
+  return (
+    <Row className="ms-4 mb-2 g-2 align-items-center" data-testid={"disk-when-" + id}>
+      <Col xs="auto">
+        <Form.Control
+          type="time"
+          size="sm"
+          aria-label="Time"
+          value={at}
+          onChange={(e) => onChange({ at: e.target.value, days })}
+        />
+      </Col>
+      <Col>
+        {weekdays.map((day) => (
+          <Form.Check
+            inline
+            key={day}
+            type="checkbox"
+            id={"image-day-" + id + "-" + day}
+            label={day.substring(0, 3)}
+            checked={everyDay || days.includes(day)}
+            onChange={() => toggleDay(day)}
+          />
+        ))}
+      </Col>
+    </Row>
+  );
+}
+
+WhenFields.propTypes = {
+  id: PropTypes.string.isRequired,
+  at: PropTypes.string.isRequired,
+  days: PropTypes.array.isRequired,
+  onChange: PropTypes.func.isRequired,
+};
+
+/**
+ * The disks to image, each with the time and days of its own schedule.
+ * perDisk holds one entry for each disk chosen, named by one of its letters.
+ */
+function DiskSchedules({ disks, perDisk, defaultWhen, onChange }) {
+  const { bytesStringBase2 } = use(UIPreferencesContext);
+
+  if (disks === null) {
+    return (
+      <div>
+        <Spinner size="sm" animation="border" /> Listing disks ...
+      </div>
+    );
+  }
+
+  const entryOf = (d) => perDisk.find((e) => d.volumes.some((v) => v.letter === e.volume));
+
+  const toggle = (d) => {
+    const e = entryOf(d);
+    onChange(e ? perDisk.filter((x) => x !== e) : [...perDisk, { volume: d.volumes[0].letter, ...defaultWhen }]);
+  };
+
+  const change = (e, when) => onChange(perDisk.map((x) => (x === e ? { ...x, ...when } : x)));
+
+  return (
+    <>
+      {disks.map((d) => {
+        const e = entryOf(d);
+
+        return (
+          <div key={d.number}>
+            <Form.Check
+              type="checkbox"
+              id={"image-disk-" + d.number}
+              checked={!!e}
+              onChange={() => toggle(d)}
+              label={
+                <>
+                  {diskLabel(d, bytesStringBase2)} {d.system && <Badge bg="secondary">Windows</Badge>}
+                </>
+              }
+            />
+            {e && <WhenFields id={String(d.number)} at={e.at} days={e.days} onChange={(w) => change(e, w)} />}
+          </div>
+        );
+      })}
+      <Form.Text>
+        Each disk is imaged whole, with all its partitions, at its own time. Disks at the same time are imaged one after
+        the other; a disk whose time comes while another is imaged waits for it.
+      </Form.Text>
+    </>
+  );
+}
+
+DiskSchedules.propTypes = {
+  disks: PropTypes.array,
+  perDisk: PropTypes.array.isRequired,
+  defaultWhen: PropTypes.object.isRequired,
+  onChange: PropTypes.func.isRequired,
+};
+
+/**
+ * Edits the image schedule: when each disk is imaged, and the weekly check.
+ * KopiaUI saves it as administrator after the UAC prompt; in a browser the
+ * form shows the command to run instead.
+ */
+export function ImageScheduleForm({ show, initial, onHide, onSaved }) {
+  const { disks, error: disksError } = useLocalDisks();
+  const [settings, setSettings] = useState(initial);
+  // null until a disk is chosen: the Windows disk, at the default time
+  const [perDisk, setPerDisk] = useState(() => {
+    const p = perDiskSchedules(initial);
+    return p.length > 0 ? p : null;
+  });
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const canSave = !!window.kopiaUI?.installImageSchedule;
+
+  const defaultWhen = { at: initial.at || defaultScheduleSettings.at, days: initial.days || [] };
+  const chosen = perDisk ?? systemVolumes(disks).map((volume) => ({ volume, ...defaultWhen }));
+  const current = withDiskSchedules(settings, chosen);
+
+  const set = (field, value) => setSettings((s) => ({ ...s, [field]: value }));
 
   const save = () => {
     setSaving(true);
@@ -219,8 +411,6 @@ export function ImageScheduleForm({ show, initial, onHide, onSaved }) {
       .finally(() => setSaving(false));
   };
 
-  const everyDay = settings.days.length === 0;
-
   return (
     <Modal show={show} onHide={onHide} size="lg">
       <Modal.Header closeButton>
@@ -229,31 +419,9 @@ export function ImageScheduleForm({ show, initial, onHide, onSaved }) {
       <Modal.Body>
         {(error || disksError) && <Alert variant="danger">{error || disksError}</Alert>}
         <Form.Group className="mb-3">
-          <Form.Label>Disks to image</Form.Label>
-          <DiskChecks disks={disks} volumes={current.volumes} onChange={setChosenVolumes} />
+          <Form.Label>Disks to image, and when</Form.Label>
+          <DiskSchedules disks={disks} perDisk={chosen} defaultWhen={defaultWhen} onChange={setPerDisk} />
         </Form.Group>
-        <Row className="mb-3">
-          <Form.Group as={Col} xs="auto" controlId="image-schedule-at">
-            <Form.Label>Time</Form.Label>
-            <Form.Control type="time" size="sm" value={settings.at} onChange={(e) => set("at", e.target.value)} />
-          </Form.Group>
-          <Form.Group as={Col}>
-            <Form.Label>Days</Form.Label>
-            <div>
-              {weekdays.map((day) => (
-                <Form.Check
-                  inline
-                  key={day}
-                  type="checkbox"
-                  id={"image-day-" + day}
-                  label={day.substring(0, 3)}
-                  checked={everyDay || settings.days.includes(day)}
-                  onChange={() => toggleDay(day)}
-                />
-              ))}
-            </div>
-          </Form.Group>
-        </Row>
         <Row className="mb-3">
           <Form.Group as={Col} xs="auto" controlId="image-schedule-check-day">
             <Form.Label>Weekly check</Form.Label>

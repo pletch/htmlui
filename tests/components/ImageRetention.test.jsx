@@ -6,12 +6,12 @@ import { MemoryRouter } from "react-router";
 import "@testing-library/jest-dom";
 import {
   DiskRetention,
-  ImageRetention,
   definedBy,
   inputsFromRetention,
   retentionCommand,
   retentionFromInputs,
 } from "../../src/components/ImageRetention";
+import { DiskSettings } from "../../src/components/DiskSettings";
 import { setupAPIMock } from "../testutils/api-mocks";
 
 const source = { host: "pc", userName: "u", path: "image:disk:0f6ab3f2-1c3d-4e5f-8a9b-0c1d2e3f4a51" };
@@ -119,15 +119,30 @@ describe("DiskRetention", () => {
   });
 });
 
-describe("ImageRetention", () => {
-  test("asks for an image first when there are no disks", () => {
+describe("DiskSettings", () => {
+  test("edits the retention of the disk it is opened for", async () => {
+    axiosMock.onGet(policyURL).reply(200, { retention: { keepDaily: 3 } });
+    axiosMock.onPost(resolveURL).reply(200, { effective: { retention: {} }, definition: { retention: {} } });
+
     render(
       <MemoryRouter>
-        <ImageRetention disks={[]} titleOf={(s) => s.path} />
+        <DiskSettings source={source} title="Disk 0f6ab3f2" onHide={() => {}} />
       </MemoryRouter>,
     );
 
-    expect(screen.getByText(/once it has an image/)).toBeInTheDocument();
+    expect(screen.getByText("Disk 0f6ab3f2 Settings")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("retention-input-keepDaily")).toHaveValue("3"));
+    expect(screen.getByRole("link", { name: "repository defaults" })).toHaveAttribute("href", "/repo?tab=defaults");
+  });
+
+  test("shows nothing while no disk is chosen", () => {
+    render(
+      <MemoryRouter>
+        <DiskSettings source={null} onHide={() => {}} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByTestId("disk-settings")).not.toBeInTheDocument();
   });
 });
 
@@ -165,5 +180,10 @@ describe("retention helpers", () => {
     expect(retentionCommand(source, inputsFromRetention({ keepLatest: 3, keepMonthly: 6 }))).toBe(
       "policy set u@pc:" + source.path + " --keep-latest 3 --keep-monthly 6",
     );
+    // a computer's policy has no path
+    expect(retentionCommand({ userName: "u", host: "pc", path: "" }, inputsFromRetention({ keepDaily: 9 }))).toBe(
+      "policy set u@pc --keep-daily 9",
+    );
+    expect(retentionCommand({ userName: "", host: "nas", path: "" }, inputsFromRetention())).toBe("policy show @nas");
   });
 });

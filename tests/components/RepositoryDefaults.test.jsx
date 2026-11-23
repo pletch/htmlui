@@ -8,6 +8,7 @@ import {
   RepositoryDefaults,
   computerName,
   computerPolicies,
+  knownComputers,
   retentionSummary,
 } from "../../src/components/RepositoryDefaults";
 import { globalSource, inputsFromRetention, retentionCommand } from "../../src/components/RetentionEditor";
@@ -71,7 +72,7 @@ describe("RepositoryDefaults", () => {
 
     // the global policy has nothing to inherit from
     expect(screen.queryByRole("button", { name: "Inherit All" })).not.toBeInTheDocument();
-    expect(screen.getByText(/No computer has its own settings/)).toBeInTheDocument();
+    expect(screen.getByText(/No computer has snapshots or settings of its own yet/)).toBeInTheDocument();
 
     const user = userEvent.setup();
     await user.clear(screen.getByTestId("retention-input-keepLatest"));
@@ -86,9 +87,21 @@ describe("RepositoryDefaults", () => {
     await waitFor(() => expect(screen.getByText(/Saved\./)).toBeInTheDocument());
   });
 
-  test("lists the computers with their own settings", async () => {
+  test("lists every computer, and edits one's retention in place", async () => {
     axiosMock.onGet(globalURL).reply(200, { retention: builtIn });
     mockResolve();
+    axiosMock.onGet("/api/v1/sources").reply(200, {
+      localUsername: "me",
+      localHost: "office",
+      sources: [{ source: { userName: "u", host: "pc", path: "/data" } }],
+    });
+    const pcURL = "/api/v1/policy?userName=u&host=pc&path=";
+    axiosMock.onGet(pcURL).reply(200, { retention: { keepDaily: 14 } });
+    axiosMock.onPost("/api/v1/policy/resolve?userName=u&host=pc&path=").reply(200, {
+      effective: { retention: { keepDaily: 14 } },
+      definition: { retention: { keepDaily: { userName: "u", host: "pc", path: "" } } },
+    });
+    axiosMock.onPut(pcURL).reply(200, {});
     axiosMock.onGet("/api/v1/policies").reply(200, {
       policies: [
         { id: "g", target: { userName: "", host: "", path: "" }, policy: { retention: builtIn } },
@@ -103,15 +116,32 @@ describe("RepositoryDefaults", () => {
     const table = await screen.findByTestId("computer-overrides");
     const rows = within(table).getAllByRole("row").slice(1);
 
-    expect(rows).toHaveLength(2);
+    // this computer, the one with snapshots and the one with only a policy
+    expect(rows).toHaveLength(3);
     expect(rows[0]).toHaveTextContent("All users on nas");
-    expect(rows[0]).toHaveTextContent("defaults");
-    expect(rows[1]).toHaveTextContent("u@pc");
-    expect(rows[1]).toHaveTextContent("Daily: 14");
-    expect(within(rows[1]).getByRole("link", { name: "Edit" })).toHaveAttribute(
+    expect(rows[0]).toHaveTextContent("repository defaults");
+    expect(rows[1]).toHaveTextContent("me@office (this computer)");
+    expect(rows[2]).toHaveTextContent("u@pc");
+    expect(rows[2]).toHaveTextContent("Daily: 14");
+    expect(within(rows[2]).getByRole("link", { name: "All Settings" })).toHaveAttribute(
       "href",
       "/policies/edit?userName=u&host=pc&path=",
     );
+
+    const user = userEvent.setup();
+    await user.click(within(rows[2]).getByTestId("computer-edit"));
+
+    const editor = await screen.findByTestId("retention-u@pc");
+    await waitFor(() => expect(within(editor).getByTestId("retention-input-keepDaily")).toHaveValue("14"));
+    await waitFor(() => expect(within(editor).getByTestId("retention-effective-keepDaily")).toHaveTextContent("u@pc"));
+
+    await user.type(within(editor).getByTestId("retention-input-keepWeekly"), "6");
+    await user.click(within(editor).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(axiosMock.history.put).toHaveLength(1));
+    expect(JSON.parse(axiosMock.history.put[0].data)).toEqual({ retention: { keepDaily: 14, keepWeekly: 6 } });
+    // the list is read again, to show what was saved
+    await waitFor(() => expect(axiosMock.history.get.filter((r) => r.url === "/api/v1/policies")).toHaveLength(2));
   });
 
   test("shows why the policies cannot be listed", async () => {
@@ -131,6 +161,20 @@ describe("repository defaults helpers", () => {
     expect(computerName({ host: "pc" })).toBe("All users on pc");
     expect(retentionSummary({ retention: { keepAnnual: 0, keepLatest: 2 } })).toBe("Latest: 2, Annual: 0");
     expect(retentionSummary({})).toBe("");
+  });
+
+  test("knows the computers from snapshots and policies", () => {
+    const computers = knownComputers(
+      [{ target: { userName: "", host: "nas", path: "" }, policy: { retention: { keepLatest: 1 } } }],
+      [{ source: { userName: "u", host: "pc", path: "/a" } }, { source: { userName: "u", host: "pc", path: "/b" } }],
+      { userName: "u", host: "pc" },
+    );
+
+    expect(computers.map((c) => [c.key, c.local, !!c.policy])).toEqual([
+      ["@nas", false, true],
+      ["u@pc", true, false],
+    ]);
+    expect(computers[1].target).toEqual({ userName: "u", host: "pc", path: "" });
   });
 
   test("keeps only computer and user policies", () => {
