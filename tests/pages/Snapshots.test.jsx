@@ -20,7 +20,12 @@ vi.mock("../../src/components/FileSnapshotSettings", async () => {
   const actual = await vi.importActual("../../src/components/FileSnapshotSettings");
   return {
     ...actual,
-    FileSnapshotSettings: ({ sections }) => <div>Settings: {sections.join(",")}</div>,
+    FileSnapshotSettings: ({ sections, target, onTarget }) => (
+      <div>
+        Settings: {sections.join(",")} for {target ?? "this computer"}
+        <button onClick={() => onTarget("u@pc")}>Choose u@pc</button>
+      </div>
+    ),
   };
 });
 
@@ -751,12 +756,16 @@ describe("Snapshots tabs", () => {
     expect(screen.getByRole("tab", { name: "Exclusions" })).toBeInTheDocument();
 
     await userEvent.setup().click(screen.getByRole("tab", { name: "Schedule" }));
-    expect(screen.getByText("Settings: scheduling")).toBeInTheDocument();
+    expect(screen.getByText(/Settings: scheduling for this computer/)).toBeInTheDocument();
+
+    // the computer chosen on one tab stays chosen on the others
+    await userEvent.setup().click(screen.getByText("Choose u@pc"));
+    expect(screen.getByText(/Settings: scheduling for u@pc/)).toBeInTheDocument();
 
     await userEvent.setup().click(screen.getByRole("tab", { name: "Advanced" }));
-    expect(screen.getByText("Settings: compression,errors,upload,logging")).toBeInTheDocument();
+    expect(screen.getByText(/Settings: compression,errors,upload,logging for u@pc/)).toBeInTheDocument();
     // the tab left is unmounted, so it reads the policy again when it opens
-    await waitFor(() => expect(screen.queryByText("Settings: scheduling")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(/Settings: scheduling/)).not.toBeInTheDocument());
   });
 
   test("opens the tab the URL asks for", () => {
@@ -765,6 +774,6 @@ describe("Snapshots tabs", () => {
 
     renderSnapshots();
 
-    expect(screen.getByText("Settings: files")).toBeInTheDocument();
+    expect(screen.getByText(/Settings: files/)).toBeInTheDocument();
   });
 });

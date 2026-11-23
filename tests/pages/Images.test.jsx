@@ -484,11 +484,22 @@ describe("Images page", () => {
     expect(screen.queryByTestId("schedule-other-repository")).not.toBeInTheDocument();
   });
 
-  test("warns about tasks of another repository", async () => {
+  test("shows nothing of the schedule of another repository but its name", async () => {
     mockLists(scheduledStatus({ scheduleForThisRepository: false }));
+    window.kopiaUI = { removeImageSchedule: vi.fn(), pauseImageSchedule: vi.fn(), installImageSchedule: vi.fn() };
     renderImages();
 
     await waitFor(() => expect(screen.getByTestId("schedule-other-repository")).toHaveTextContent("NAS"));
+    expect(screen.queryByTestId("schedule-summary")).not.toBeInTheDocument();
+    expect(screen.queryByText("Image create", { selector: ".source-name" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("remove-schedule")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("pause-schedule")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Images are not scheduled/)).not.toBeInTheDocument();
+    expect(screen.getByTestId("edit-schedule")).toHaveTextContent("Set Up Schedule...");
+
+    // a disk's Settings do not show the other repository's schedule either
+    await userEvent.click(screen.getByTestId("disk-settings-button"));
+    expect(await screen.findByTestId("disk-schedule")).toHaveTextContent("Not scheduled");
   });
 
   test("updates tasks that run an older kopia", async () => {

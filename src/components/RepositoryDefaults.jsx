@@ -78,6 +78,43 @@ function errorText(e) {
   return e?.response?.data?.error || e?.message || String(e);
 }
 
+/**
+ * Lists the computers the repository knows, see knownComputers.
+ *
+ * @returns {{list: Array, local: object|undefined}|null} null while listing
+ */
+export function useKnownComputers() {
+  const [computers, setComputers] = useState(null);
+
+  useEffect(() => {
+    let live = true;
+
+    Promise.all([
+      axios
+        .get("/api/v1/policies")
+        .then((r) => r.data.policies || [])
+        .catch(() => []),
+      axios
+        .get("/api/v1/sources")
+        .then((r) => r.data)
+        .catch(() => ({ sources: [] })),
+    ]).then(([policies, src]) => {
+      if (!live) {
+        return;
+      }
+
+      const list = knownComputers(policies, src.sources || [], { userName: src.localUsername, host: src.localHost });
+      setComputers({ list, local: list.find((c) => c.local) });
+    });
+
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  return computers;
+}
+
 /** One computer: its retention, and its editor while it is open. */
 function ComputerRow({ computer, open, onToggle, onSaved }) {
   const name = computerName(computer.target);

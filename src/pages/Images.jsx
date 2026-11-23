@@ -118,6 +118,22 @@ export function taskStateVariant(status) {
   }
 }
 
+/**
+ * Returns the image status as this repository sees it. A computer has one
+ * image schedule: when it writes to another repository, its settings and
+ * tasks are that repository's, so they move to otherSchedule, which only
+ * names the repository; the server leaves out that repository's runs.
+ */
+export function statusOfThisRepository(status) {
+  if (status?.scheduleForThisRepository !== false) {
+    return status;
+  }
+
+  const { schedule, ...rest } = status;
+
+  return { ...rest, tasks: [], otherSchedule: { repository: schedule?.repository } };
+}
+
 /** Returns the short name of a scheduled task, without its Task Scheduler folder. */
 export function taskShortName(name) {
   return name.substring(name.lastIndexOf("\\") + 1);
@@ -367,12 +383,6 @@ function ScheduleSettings({ status, busy, onUpdate }) {
         {scheduleSummary(settingsFromSchedule(s))}
         {s.paused && " Images are not created automatically until the schedule is resumed."}
       </p>
-      {status.scheduleForThisRepository === false && (
-        <Alert variant="warning" data-testid="schedule-other-repository">
-          <FontAwesomeIcon icon={faExclamationTriangle} /> The scheduled images go to another repository
-          {s.repository ? ", " + s.repository : ""}. Changing the schedule here makes them go to this one.
-        </Alert>
-      )}
       {s.kopiaVersion && status.kopiaVersion && s.kopiaVersion !== status.kopiaVersion && (
         <Alert variant="warning" data-testid="schedule-outdated">
           <FontAwesomeIcon icon={faExclamationTriangle} /> The scheduled tasks run kopia {s.kopiaVersion}; this is kopia{" "}
@@ -516,6 +526,7 @@ function ScheduleTab({ status, bytesStringBase2, onEdit, onRemove, onPause, onUp
 
   const createTask = status.tasks[0];
   const scheduled = createTask?.scheduled;
+  const other = status.otherSchedule;
 
   return (
     <>
@@ -541,7 +552,14 @@ function ScheduleTab({ status, bytesStringBase2, onEdit, onRemove, onPause, onUp
           </Button>
         )}
       </div>
-      {!scheduled && !createTask?.error && (
+      {other && (
+        <Alert variant="info" data-testid="schedule-other-repository">
+          <FontAwesomeIcon icon={faInfoCircle} /> This computer&apos;s images are scheduled to another repository
+          {other.repository ? ", " + other.repository : ""}; its tasks and runs show when connected to it. A computer
+          has one image schedule: setting one up here replaces it.
+        </Alert>
+      )}
+      {!other && !scheduled && !createTask?.error && (
         <Alert variant="info">
           <FontAwesomeIcon icon={faInfoCircle} /> Images are not scheduled on this computer. Create one now, or set up a
           schedule to create them automatically.
@@ -549,22 +567,24 @@ function ScheduleTab({ status, bytesStringBase2, onEdit, onRemove, onPause, onUp
       )}
       {scheduled && <ScheduleSettings status={status} busy={busy} onUpdate={onUpdate} />}
       {status.scheduleError && <Alert variant="danger">{status.scheduleError}</Alert>}
-      <Table size="sm" responsive>
-        <thead>
-          <tr>
-            <th>Task</th>
-            <th>Status</th>
-            <th>Next Run</th>
-            <th>Last Run</th>
-            <th>Last Result</th>
-          </tr>
-        </thead>
-        <tbody>
-          {status.tasks.map((t) => (
-            <TaskRow key={t.name} task={t} volumes={taskVolumes(status.schedule, t.name)} />
-          ))}
-        </tbody>
-      </Table>
+      {status.tasks.length > 0 && (
+        <Table size="sm" responsive>
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Status</th>
+              <th>Next Run</th>
+              <th>Last Run</th>
+              <th>Last Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {status.tasks.map((t) => (
+              <TaskRow key={t.name} task={t} volumes={taskVolumes(status.schedule, t.name)} />
+            ))}
+          </tbody>
+        </Table>
+      )}
       <h6>Last image run</h6>
       <LastRun status={status} bytesStringBase2={bytesStringBase2} />
     </>
@@ -1383,7 +1403,7 @@ export function Images() {
     axios
       .get("/api/v1/images/status")
       .then((result) => {
-        setStatus(result.data);
+        setStatus(statusOfThisRepository(result.data));
 
         // a run that ended added images; the message that it started is done.
         // After a failure, such as the repository server restarting, the

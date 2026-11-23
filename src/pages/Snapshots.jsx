@@ -67,6 +67,8 @@ export class Snapshots extends Component {
 
       // the open tab; links can open another with /snapshots?tab=<key>
       tab: initialTab(),
+      // the computer whose settings the settings tabs edit; null is this one
+      settingsTarget: null,
     };
 
     this.sync = this.sync.bind(this);
@@ -342,7 +344,12 @@ export class Snapshots extends Component {
         </Tab>
         {fileSettingsTabs.map((t) => (
           <Tab key={t.key} eventKey={t.key} title={t.title}>
-            <FileSnapshotSettings sections={t.sections} intro={t.intro} />
+            <FileSnapshotSettings
+              sections={t.sections}
+              intro={t.intro}
+              target={this.state.settingsTarget}
+              onTarget={(k) => this.setState({ settingsTarget: k })}
+            />
           </Tab>
         ))}
       </Tabs>
