@@ -37,7 +37,7 @@ function FolderPolicy({ source }) {
     <>
       <p data-testid="folder-policy-scope">
         Settings set here apply to this folder only. Empty settings are inherited from this computer&apos;s settings and
-        the ones on the <Link to="/snapshots?tab=backup">File Snapshots</Link> tabs.
+        the ones on the <Link to="/snapshots?tab=exclusions">File Snapshots</Link> tabs.
       </p>
       <PolicyEditor userName={source.userName} host={source.host} path={source.path} />
       <CLIEquivalent command={`policy set "${name}"`} />

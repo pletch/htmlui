@@ -755,7 +755,8 @@ describe("Snapshots tabs", () => {
 
     renderSnapshots();
 
-    expect(screen.getByRole("tab", { name: "Snapshots" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Folders" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Exclusions" })).toBeInTheDocument();
 
     await userEvent.setup().click(screen.getByRole("tab", { name: "Schedule" }));
     expect(screen.getByText("Settings: scheduling")).toBeInTheDocument();
@@ -767,7 +768,7 @@ describe("Snapshots tabs", () => {
   });
 
   test("opens the tab the URL asks for", () => {
-    window.history.replaceState({}, "", "/snapshots?tab=backup");
+    window.history.replaceState({}, "", "/snapshots?tab=exclusions");
     axiosMock.onGet("/api/v1/sources").reply(200, { localUsername: "u", localHost: "h", sources: [] });
 
     renderSnapshots();

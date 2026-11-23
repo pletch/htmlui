@@ -350,12 +350,12 @@ export class Snapshots extends Component {
         unmountOnExit
         data-testid="snapshot-tabs"
       >
-        <Tab eventKey="snapshots" title="Snapshots">
+        <Tab eventKey="snapshots" title="Folders">
           {this.renderList()}
         </Tab>
         {fileSettingsTabs.map((t) => (
           <Tab key={t.key} eventKey={t.key} title={t.title}>
-            {t.sections ? <FileSnapshotSettings sections={t.sections} /> : this.renderRetention()}
+            {t.sections ? <FileSnapshotSettings sections={t.sections} intro={t.intro} /> : this.renderRetention()}
           </Tab>
         ))}
       </Tabs>
